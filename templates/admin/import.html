@@ -1,0 +1,112 @@
+{% set title = "Import — Drill admin" %}{% include "admin/partials/head.html" %}
+<div class="grid grid-cols-[252px_minmax(0,1fr)] min-w-[1260px]">
+{% include "admin/partials/sidebar.html" %}
+  <main>
+    <div class="bg-band border-b border-edge">
+      <div class="px-9 py-[18px] flex flex-wrap items-center justify-between gap-5">
+        <div class="flex items-baseline gap-4">
+          <span class="font-serif text-[25px] tracking-[-0.02em]">Import</span>
+          <span class="label text-muted2">CSV or JSON paste</span>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <a href="/admin/questions/new" class="border border-ink bg-ink text-paper px-[18px] py-2 text-[13px] font-medium rounded-full no-underline hover:bg-[#3d342b] hover:border-[#3d342b]">New question</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-9 pb-[72px]">
+      {% if result %}
+        <div class="mt-6 border {% if result.rejected > 0 %}border-rustd{% else %}border-ink{% endif %} bg-band px-5 py-4 text-[13.5px]">
+          <span class="font-medium">{{ result.accepted }} question{% if result.accepted != 1 %}s{% endif %} added.</span>
+          {% if result.rejected > 0 %}<span class="text-rustd"> {{ result.rejected }} row{% if result.rejected != 1 %}s{% endif %} rejected: {{ result.reason }}</span>{% endif %}
+        </div>
+      {% endif %}
+
+      <form method="post" action="/admin/import" class="grid grid-cols-[minmax(0,1.3fr)_minmax(0,1fr)] gap-11 pt-[26px]">
+        <div>
+          <div class="flex flex-wrap items-center gap-3.5">
+            <div class="flex border border-line">
+              <label class="border-0 border-r border-edge px-[18px] py-2 label cursor-pointer {% if format != "csv" %}bg-ink text-paper{% else %}bg-transparent text-muted{% endif %}">
+                <input type="radio" name="format" value="json" {% if format != "csv" %}checked{% endif %} class="sr-only" />JSON
+              </label>
+              <label class="border-0 px-[18px] py-2 label cursor-pointer {% if format == "csv" %}bg-ink text-paper{% else %}bg-transparent text-muted{% endif %}">
+                <input type="radio" name="format" value="csv" {% if format == "csv" %}checked{% endif %} class="sr-only" />CSV
+              </label>
+            </div>
+            <select name="track" class="border border-line bg-field px-2.5 py-2 text-[13px]">
+              {% for t in track_options %}
+              <option value="{{ t.slug }}" {% if t.slug == track %}selected{% endif %}>{{ t.code }} · {{ t.name }}</option>
+              {% endfor %}
+            </select>
+            <label class="flex items-center gap-2 text-[13px] text-ink2 cursor-pointer">
+              <input type="checkbox" name="as_draft" value="1" checked class="w-[15px] h-[15px] accent-ink" />
+              Add as drafts
+            </label>
+          </div>
+
+          <textarea name="payload" spellcheck="false" placeholder="[
+  {
+    &quot;question&quot;: &quot;Which S3 storage class …&quot;,
+    &quot;options&quot;: [&quot;Standard-IA&quot;, &quot;Glacier Flexible Retrieval&quot;, &quot;Deep Archive&quot;, &quot;Intelligent-Tiering&quot;],
+    &quot;answer&quot;: [2],
+    &quot;domain&quot;: &quot;Cost-optimized architectures&quot;,
+    &quot;explain&quot;: &quot;Deep Archive is the cheapest class …&quot;,
+    &quot;difficulty&quot;: &quot;Medium&quot;
+  }
+]" class="w-full h-[340px] mt-4 border border-line bg-field p-4 font-mono text-[12.5px] leading-[1.7] resize-y">{{ payload }}</textarea>
+
+          <div class="flex flex-wrap items-center gap-3 mt-4">
+            <button class="border border-ink bg-ink text-paper px-[22px] py-2.5 text-[13.5px] font-medium rounded-full cursor-pointer hover:bg-[#3d342b]">Import</button>
+            <span class="text-[12.5px] text-muted">Rows land as drafts unless you uncheck the box above.</span>
+          </div>
+        </div>
+
+        <div class="flex flex-col gap-[30px] pt-1">
+          <div>
+            <div class="label !tracking-[0.14em] text-muted2 border-b border-ink pb-[9px]">Expected columns</div>
+            <div class="grid grid-cols-[108px_minmax(0,1fr)] gap-3.5 py-[9px] border-b border-hair text-[13px] items-baseline">
+              <div class="font-mono text-[12px] text-rustd">question</div>
+              <div class="text-ink2 leading-[1.5] text-pretty">The prompt. Required.</div>
+            </div>
+            <div class="grid grid-cols-[108px_minmax(0,1fr)] gap-3.5 py-[9px] border-b border-hair text-[13px] items-baseline">
+              <div class="font-mono text-[12px] text-rustd">options</div>
+              <div class="text-ink2 leading-[1.5] text-pretty">Two to six choices, pipe separated in CSV, an array in JSON.</div>
+            </div>
+            <div class="grid grid-cols-[108px_minmax(0,1fr)] gap-3.5 py-[9px] border-b border-hair text-[13px] items-baseline">
+              <div class="font-mono text-[12px] text-rustd">answer</div>
+              <div class="text-ink2 leading-[1.5] text-pretty">Zero-based indices. More than one makes it multi-select.</div>
+            </div>
+            <div class="grid grid-cols-[108px_minmax(0,1fr)] gap-3.5 py-[9px] border-b border-hair text-[13px] items-baseline">
+              <div class="font-mono text-[12px] text-rustd">domain</div>
+              <div class="text-ink2 leading-[1.5] text-pretty">Must match a domain already on the track.</div>
+            </div>
+            <div class="grid grid-cols-[108px_minmax(0,1fr)] gap-3.5 py-[9px] border-b border-hair text-[13px] items-baseline">
+              <div class="font-mono text-[12px] text-rustd">explain</div>
+              <div class="text-ink2 leading-[1.5] text-pretty">Shown after the answer.</div>
+            </div>
+            <div class="grid grid-cols-[108px_minmax(0,1fr)] gap-3.5 py-[9px] border-b border-hair text-[13px] items-baseline">
+              <div class="font-mono text-[12px] text-rustd">difficulty</div>
+              <div class="text-ink2 leading-[1.5] text-pretty">Easy, Medium or Hard. Defaults to Medium.</div>
+            </div>
+          </div>
+
+          <div>
+            <div class="label !tracking-[0.14em] text-muted2 border-b border-ink pb-[9px]">Recent imports</div>
+            {% for imp in recent %}
+            <div class="py-[11px] border-b border-hair">
+              <div class="flex justify-between gap-3 text-[13.5px]">
+                <span>{{ imp.summary }}</span>
+                <span class="text-muted text-[12px]">{{ imp.when }}</span>
+              </div>
+              <div class="text-[12px] mt-1 {% if imp.rejected %}text-rustd{% else %}text-muted{% endif %}">{{ imp.outcome }}</div>
+            </div>
+            {% else %}
+            <div class="py-[11px] text-[13px] text-muted">No imports yet.</div>
+            {% endfor %}
+          </div>
+        </div>
+      </form>
+    </div>
+  </main>
+</div>
+{% include "admin/partials/foot.html" %}

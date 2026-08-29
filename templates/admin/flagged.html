@@ -1,0 +1,65 @@
+{% set title = "Flagged — Drill admin" %}{% include "admin/partials/head.html" %}
+<div class="grid grid-cols-[252px_minmax(0,1fr)] min-w-[1260px]">
+{% include "admin/partials/sidebar.html" %}
+  <main>
+    <div class="bg-band border-b border-edge">
+      <div class="px-9 py-[18px] flex flex-wrap items-center justify-between gap-5">
+        <div class="flex items-baseline gap-4">
+          <span class="font-serif text-[25px] tracking-[-0.02em]">Flagged</span>
+          <span class="label text-muted2">{{ groups | length }} open</span>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <a href="/admin/import" class="border border-line bg-paper px-4 py-2 text-[13px] rounded-full no-underline text-ink hover:border-ink">Import questions</a>
+          <a href="/admin/questions/new" class="border border-ink bg-ink text-paper px-[18px] py-2 text-[13px] font-medium rounded-full no-underline hover:bg-[#3d342b] hover:border-[#3d342b]">New question</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-9 pb-[72px] max-w-[1120px]">
+      <div class="pt-[22px] pb-[26px] border-b border-rule">
+        <p class="text-[14.5px] leading-[1.6] text-ink2 m-0 max-w-[46em] text-pretty">Learner reports, newest first. Keep dismisses the report and leaves the question live. Edit opens the question. Retire pulls it from every set without deleting the history behind it.</p>
+      </div>
+
+      {% for g in groups %}
+      <div class="py-6 border-b border-hair">
+        <div class="flex flex-wrap items-baseline gap-4">
+          <span class="label font-semibold text-rustd">{{ g.report_count }} report{% if g.report_count != 1 %}s{% endif %}</span>
+          <span class="text-[11px] tracking-[0.08em] text-faint">{{ g.cert_code }} · {{ g.domain }}</span>
+          <span class="text-[12px] text-muted ml-auto">{{ g.when }}</span>
+        </div>
+
+        <div class="grid grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] gap-9 mt-3.5">
+          <div>
+            <div class="font-serif text-[21px] leading-[1.4] text-pretty">{{ g.body }}</div>
+            <div class="mt-3.5 flex flex-col gap-1.5">
+              {% for opt in g.options %}
+              <div class="flex gap-3 text-[14px] leading-[1.5] {% if opt.is_correct %}text-ink{% else %}text-muted{% endif %}">
+                <span class="w-3.5 shrink-0 font-serif">{{ opt.letter }}</span>
+                <span>{{ opt.body }}</span>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          <div>
+            <div class="label text-muted2">What learners said</div>
+            <div class="flex flex-col gap-2.5 mt-3">
+              {% for c in g.comments %}
+              <div class="border-l-2 border-line pl-3 text-[13.5px] leading-[1.5] text-ink2 text-pretty">{{ c.text }}</div>
+              {% endfor %}
+            </div>
+            <form method="post" action="/admin/flagged" class="flex flex-wrap gap-2 mt-[18px]">
+              <input type="hidden" name="question_id" value="{{ g.question_id }}" />
+              <button formaction="/admin/questions/{{ g.question_id }}" formmethod="get" class="border border-ink bg-ink text-paper px-4 py-[7px] text-[12.5px] rounded-full cursor-pointer hover:bg-[#3d342b]">Edit question</button>
+              <button name="action" value="keep" class="border border-line bg-transparent px-4 py-[7px] text-[12.5px] rounded-full cursor-pointer hover:border-ink">Keep</button>
+              <button name="action" value="retire" class="border border-line bg-transparent px-4 py-[7px] text-[12.5px] text-rustd rounded-full cursor-pointer hover:border-rustd">Retire</button>
+            </form>
+          </div>
+        </div>
+      </div>
+      {% else %}
+      <div class="py-10 text-[14px] text-muted">No open reports. Nice.</div>
+      {% endfor %}
+    </div>
+  </main>
+</div>
+{% include "admin/partials/foot.html" %}

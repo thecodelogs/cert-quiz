@@ -1,0 +1,58 @@
+{% set title = "Users — Drill admin" %}{% include "admin/partials/head.html" %}
+<div class="grid grid-cols-[252px_minmax(0,1fr)] min-w-[1260px]">
+{% include "admin/partials/sidebar.html" %}
+  <main>
+    <div class="bg-band border-b border-edge">
+      <div class="px-9 py-[18px] flex flex-wrap items-center justify-between gap-5">
+        <div class="flex items-baseline gap-4">
+          <span class="font-serif text-[25px] tracking-[-0.02em]">Users</span>
+          <span class="label text-muted2">{{ rows | length }} account{% if rows | length != 1 %}s{% endif %}</span>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <a href="/admin/import" class="border border-line bg-paper px-4 py-2 text-[13px] rounded-full no-underline text-ink hover:border-ink">Import questions</a>
+          <a href="/admin/questions/new" class="border border-ink bg-ink text-paper px-[18px] py-2 text-[13px] font-medium rounded-full no-underline hover:bg-[#3d342b] hover:border-[#3d342b]">New question</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-9 pb-[72px]">
+      <div class="flex flex-wrap items-center justify-between gap-4 py-[18px] border-b border-rule">
+        <form method="get" action="/admin/users">
+          <input name="q" value="{{ filter_q }}" placeholder="Search name or email" class="border border-line bg-field px-3 py-2 text-[13px] w-[280px]" />
+        </form>
+        <div class="label text-muted2">{{ rows | length }} shown</div>
+      </div>
+
+      <div class="grid grid-cols-[minmax(0,1fr)_96px_92px_96px_104px_108px] gap-[18px] pt-3 pb-[9px] border-b border-ink label text-muted2">
+        <div>User</div>
+        <div>Role</div>
+        <div class="text-right">Attempts</div>
+        <div class="text-right">Mean score</div>
+        <div class="text-right">Last active</div>
+        <div class="text-right">Access</div>
+      </div>
+
+      {% for u in rows %}
+      <div class="grid grid-cols-[minmax(0,1fr)_96px_92px_96px_104px_108px] gap-[18px] py-[13px] border-b border-hair items-center">
+        <div>
+          <div class="text-[14.5px] font-medium">{{ u.name }}</div>
+          <div class="text-[12px] text-muted mt-0.5">{{ u.email }}</div>
+        </div>
+        <div class="text-[12.5px] {% if u.role != "Learner" %}text-rustd{% else %}text-muted{% endif %}">{{ u.role }}</div>
+        <div class="cell text-right text-ink2">{{ u.attempts }}</div>
+        <div class="cell text-right {% if u.mean_score and u.mean_score < 72 %}text-rustd{% else %}text-ink2{% endif %}">{% if u.mean_score %}{{ u.mean_score }}%{% else %}—{% endif %}</div>
+        <div class="text-[12.5px] text-right text-muted">{{ u.last_active }}</div>
+        <div class="text-right">
+          <form method="post" action="/admin/users">
+            <input type="hidden" name="toggle" value="{{ u.email }}" />
+            <button class="border px-3 py-[5px] label rounded-full cursor-pointer {% if u.status == "suspended" %}border-ink bg-ink text-paper{% else %}border-line text-muted{% endif %}">{% if u.status == "suspended" %}Suspended{% else %}Active{% endif %}</button>
+          </form>
+        </div>
+      </div>
+      {% else %}
+      <div class="py-8 text-[13.5px] text-muted">No users match this search.</div>
+      {% endfor %}
+    </div>
+  </main>
+</div>
+{% include "admin/partials/foot.html" %}

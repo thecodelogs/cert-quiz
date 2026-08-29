@@ -1,0 +1,26 @@
+{% set title = "Admin login — Drill" %}{% include "admin/partials/head.html" %}
+
+<div class="min-h-screen flex items-center justify-center px-6 bg-paper">
+  <div class="w-full max-w-sm border border-edge bg-band px-8 py-9">
+    <div class="font-serif text-[24px] font-medium tracking-[-0.02em]">Drill<span class="text-rust">.</span></div>
+    <div class="text-[11px] tracking-[0.18em] uppercase text-muted2 mt-[7px] mb-6">Admin</div>
+
+    {% if error %}
+      <div class="mb-4 text-[13px] text-rustd border border-rustd bg-paper px-3 py-2">{{ error }}</div>
+    {% endif %}
+
+    <form method="post" action="/admin/login" class="flex flex-col gap-3.5">
+      <label class="flex flex-col gap-1.5 label text-muted2">
+        Email
+        <input type="email" name="email" required class="normal-case tracking-normal text-[14px] border border-line bg-field px-3 py-2 text-ink" />
+      </label>
+      <label class="flex flex-col gap-1.5 label text-muted2">
+        Password
+        <input type="password" name="password" required class="normal-case tracking-normal text-[14px] border border-line bg-field px-3 py-2 text-ink" />
+      </label>
+      <button type="submit" class="mt-2 border border-ink bg-ink text-paper px-4 py-2.5 text-[13.5px] font-medium rounded-full cursor-pointer hover:bg-[#3d342b]">Sign in</button>
+    </form>
+  </div>
+</div>
+
+{% include "admin/partials/foot.html" %}

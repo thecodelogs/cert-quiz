@@ -1,0 +1,65 @@
+{% set title = cert_code ~ " — question " ~ q_number %}{% include "partials/head.html" %}
+
+<form method="post" action="/quiz/{{ cert_id }}">
+  <input type="hidden" name="index" value="{{ index }}" />
+  <input type="hidden" name="answers" value="{{ answers_json }}" />
+  <input type="hidden" name="instant" id="instant" value="{% if instant %}1{% else %}0{% endif %}" />
+  <input type="hidden" name="revealed" value="{% if revealed %}1{% else %}0{% endif %}" />
+  <input type="hidden" name="elapsed" id="elapsed" value="{{ elapsed }}" />
+  <input type="hidden" name="action" id="action" value="next" />
+
+  <div class="bg-band border-b border-edge">
+    <div class="max-w-[1180px] mx-auto px-14 py-[22px] flex flex-wrap items-center justify-between gap-5 label text-muted">
+      <div class="flex items-center gap-[22px]">
+        <span class="text-ink font-semibold">{{ cert_code }}</span>
+        <span>Question {{ q_number }} of {{ total }}</span>
+      </div>
+      <div class="flex items-center gap-[22px]">
+        <span id="clock" data-elapsed="{{ elapsed }}">00:00</span>
+        <button type="submit"
+                onclick="document.getElementById('action').value='stay'; document.getElementById('instant').value='{{ instant_next }}';"
+                class="rounded-full px-[15px] py-[7px] label-sm cursor-pointer border {% if instant %}bg-ink text-paper border-ink{% else %}bg-transparent text-muted border-line{% endif %}">Instant · {% if instant %}on{% else %}off{% endif %}</button>
+        <a href="/" class="label-sm text-muted hover:text-rustd no-underline">Exit</a>
+      </div>
+    </div>
+    <div class="h-0.5 bg-hair"><div class="h-0.5 bg-rust" style="width: {{ progress }}%"></div></div>
+  </div>
+
+  <div class="max-w-[900px] mx-auto px-14 pt-[72px] pb-24">
+    <div class="flex flex-wrap gap-5 label text-muted">
+      <span>{{ domain }}</span>
+      <span class="text-rustd">{{ select_hint }}</span>
+    </div>
+    <h2 class="font-serif font-normal text-[40px] leading-[1.28] tracking-[-0.02em] mt-6 mb-11 text-pretty">{{ question }}</h2>
+
+    <div class="flex flex-col gap-0.5">
+      {% for opt in options %}
+        <label class="flex items-start gap-[22px] px-6 py-[22px] border-l-[3px] {{ opt.rule_class }} {{ opt.bg_class }} cursor-pointer has-[:checked]:border-l-ink has-[:checked]:bg-pick">
+          <input type="{{ input_type }}" name="choice" value="{{ opt.value }}" class="sr-only"{% if opt.checked %} checked{% endif %} />
+          <span class="shrink-0 font-serif text-[20px] w-[18px] {{ opt.letter_class }}">{{ opt.letter }}</span>
+          <span class="font-serif text-[20px] leading-[1.5] text-ink">{{ opt.text }}</span>
+        </label>
+      {% endfor %}
+    </div>
+
+    {% if revealed %}
+      <div class="mt-[34px] pt-6 border-t border-rule">
+        <div class="label-sm font-semibold {% if correct %}text-ink{% else %}text-rustd{% endif %}">{% if correct %}Correct{% else %}Not correct{% endif %}</div>
+        <p class="font-serif text-[19px] leading-[1.6] text-ink2 mt-3.5 mb-0 text-pretty">{{ explain }}</p>
+      </div>
+    {% endif %}
+
+    <div class="flex flex-wrap items-center gap-[18px] mt-14 pt-7 border-t border-rule">
+      <button type="submit" onclick="document.getElementById('action').value='next'"
+              class="border border-ink bg-ink text-paper rounded-full px-8 py-[15px] text-[15px] font-medium cursor-pointer hover:bg-[#3d342b] hover:border-[#3d342b]">{% if is_last %}Finish set{% else %}Next question{% endif %}</button>
+      <button type="submit" onclick="document.getElementById('action').value='skip'"
+              class="border border-line bg-transparent rounded-full px-[26px] py-[15px] text-[15px] cursor-pointer hover:border-ink">Skip</button>
+      <button type="submit" onclick="document.getElementById('action').value='prev'"
+              class="border-0 bg-transparent p-0 label !text-[13px] text-muted hover:text-ink cursor-pointer">← Previous</button>
+      <button type="submit" onclick="document.getElementById('action').value='finish'"
+              class="border-0 bg-transparent p-0 ml-auto label !text-[13px] text-muted hover:text-rustd cursor-pointer">Finish now</button>
+    </div>
+  </div>
+</form>
+
+{% include "partials/foot.html" %}

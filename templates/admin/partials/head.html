@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{{ title | default(value="Drill admin") }}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&family=Libre+Franklin:wght@400;500;600&display=swap" rel="stylesheet" />
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+    tailwind.config = {
+      theme: { extend: {
+        colors: {
+          paper: '#f7f2e8', band: '#f1e7d3', bandhi: '#e8dbc0', bandhover: '#ece0c8',
+          field: '#fdfaf3', draftrow: '#f4ecdc',
+          rule: '#d9d0c0', hair: '#e3dacb', edge: '#e2d7c1', line: '#c8bda9',
+          ink: '#241f1a', ink2: '#4e463d',
+          muted: '#6f6659', muted2: '#6b6255', faint: '#7f7568', ghost: '#a89e91',
+          rust: '#b4531f', rustd: '#9a4620',
+          pick: '#efe6d5', right: '#eae2cf'
+        },
+        fontFamily: {
+          serif: ['Newsreader', 'Georgia', 'serif'],
+          sans: ['"Libre Franklin"', 'system-ui', 'sans-serif']
+        }
+      } }
+    };
+</script>
+<style type="text/tailwindcss">
+  @layer utilities {
+    .label { @apply text-[11px] tracking-[0.12em] uppercase; }
+    .cell  { @apply text-[13px]; }
+  }
+</style>
+</head>
+<body class="bg-paper text-ink font-sans text-[14px] antialiased">

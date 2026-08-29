@@ -1,0 +1,34 @@
+  <aside class="bg-band border-r border-edge py-[30px] flex flex-col gap-12 min-h-screen">
+    <div class="px-[26px]">
+      <div class="font-serif text-[27px] font-medium tracking-[-0.02em]">Drill<span class="text-rust">.</span></div>
+      <div class="text-[11px] tracking-[0.18em] uppercase text-muted2 mt-[7px]">Admin</div>
+    </div>
+
+    <nav class="flex flex-col gap-1">
+      <a href="/admin" class="flex items-baseline justify-between gap-3 no-underline border-l-[3px] pl-[23px] pr-6 py-3.5 font-serif text-[19px] tracking-[-0.01em] {% if active == "dashboard" %}border-ink bg-bandhi text-ink font-medium{% else %}border-transparent text-ink2 hover:bg-bandhover{% endif %}">
+        <span>Dashboard</span>
+        <span class="font-sans text-[11.5px] tracking-[0.06em] text-faint"></span>
+      </a>
+      <a href="/admin/questions" class="flex items-baseline justify-between gap-3 no-underline border-l-[3px] pl-[23px] pr-6 py-3.5 font-serif text-[19px] tracking-[-0.01em] {% if active == "questions" %}border-ink bg-bandhi text-ink font-medium{% else %}border-transparent text-ink2 hover:bg-bandhover{% endif %}">
+        <span>Questions</span>
+        <span class="font-sans text-[11.5px] tracking-[0.06em] text-faint">{{ nav_questions }}</span>
+      </a>
+      <a href="/admin/flagged" class="flex items-baseline justify-between gap-3 no-underline border-l-[3px] pl-[23px] pr-6 py-3.5 font-serif text-[19px] tracking-[-0.01em] {% if active == "flagged" %}border-ink bg-bandhi text-ink font-medium{% else %}border-transparent text-ink2 hover:bg-bandhover{% endif %}">
+        <span>Flagged</span>
+        <span class="font-sans text-[11.5px] tracking-[0.06em] text-rustd">{{ nav_flagged }}</span>
+      </a>
+      <a href="/admin/import" class="flex items-baseline justify-between gap-3 no-underline border-l-[3px] pl-[23px] pr-6 py-3.5 font-serif text-[19px] tracking-[-0.01em] {% if active == "import" %}border-ink bg-bandhi text-ink font-medium{% else %}border-transparent text-ink2 hover:bg-bandhover{% endif %}">
+        <span>Import</span>
+        <span class="font-sans text-[11.5px] tracking-[0.06em] text-faint"></span>
+      </a>
+      <a href="/admin/users" class="flex items-baseline justify-between gap-3 no-underline border-l-[3px] pl-[23px] pr-6 py-3.5 font-serif text-[19px] tracking-[-0.01em] {% if active == "users" %}border-ink bg-bandhi text-ink font-medium{% else %}border-transparent text-ink2 hover:bg-bandhover{% endif %}">
+        <span>Users</span>
+        <span class="font-sans text-[11.5px] tracking-[0.06em] text-faint">{{ nav_users }}</span>
+      </a>
+    </nav>
+
+    <div class="mt-auto px-[26px] text-[11.5px] leading-[2] tracking-[0.06em] text-muted2">
+      <div class="border-t border-edge pt-3.5">{{ admin_name }}</div>
+      <form method="post" action="/admin/logout"><button type="submit" class="border-0 bg-transparent p-0 text-muted2 hover:text-rustd cursor-pointer underline">Log out</button></form>
+    </div>
+  </aside>

@@ -1,0 +1,110 @@
+{% set title = "Drill — certification practice" %}{% include "partials/head.html" %}
+
+<div class="bg-band border-b border-edge">
+  <div class="max-w-[1180px] mx-auto px-14 py-6 flex items-baseline justify-between gap-6">
+    <a href="/" class="font-serif text-[24px] font-medium tracking-[-0.01em] no-underline text-ink">Drill<span class="text-rust">.</span></a>
+    <div class="flex items-baseline gap-7">
+      <div class="label text-muted2">{{ total_questions }} questions · {{ tracks }} tracks</div>
+      <button type="button" id="authOpen" class="label !text-[13px] font-medium text-ink border border-line rounded-full px-[18px] py-[9px] bg-transparent cursor-pointer hover:border-ink">Log in</button>
+    </div>
+  </div>
+</div>
+
+<div id="authOverlay" class="hidden fixed inset-0 bg-[#241f1a]/40 z-50 items-center justify-center p-6">
+  <div class="bg-paper border border-line rounded-[18px] w-full max-w-[420px] p-10 relative">
+    <button type="button" id="authClose" aria-label="Close" class="absolute top-5 right-5 text-muted hover:text-ink bg-transparent border-0 cursor-pointer text-[20px] leading-none">×</button>
+
+    <div class="flex gap-7 border-b border-rule mb-8">
+      <button type="button" id="tabLogin" class="label !text-[13px] font-medium pb-3 -mb-px border-b-2 border-ink text-ink bg-transparent cursor-pointer">Log in</button>
+      <button type="button" id="tabSignup" class="label !text-[13px] font-medium pb-3 -mb-px border-b-2 border-transparent text-muted hover:text-ink bg-transparent cursor-pointer">Sign up</button>
+    </div>
+
+    <form id="formLogin" class="flex flex-col gap-4">
+      <h3 class="font-serif text-[26px] font-normal tracking-[-0.02em] m-0 mb-1">Welcome back</h3>
+      <label class="flex flex-col gap-2 label !text-[11px] text-muted">Email
+        <input type="email" required class="font-sans normal-case tracking-normal text-[15px] text-ink border border-line rounded-lg px-4 py-3 bg-paper" />
+      </label>
+      <label class="flex flex-col gap-2 label !text-[11px] text-muted">Password
+        <input type="password" required class="font-sans normal-case tracking-normal text-[15px] text-ink border border-line rounded-lg px-4 py-3 bg-paper" />
+      </label>
+      <button type="submit" class="mt-2 border border-ink bg-ink text-paper rounded-full px-8 py-[15px] text-[15px] font-medium cursor-pointer hover:bg-[#3d342b] hover:border-[#3d342b]">Log in</button>
+    </form>
+
+    <form id="formSignup" class="hidden flex-col gap-4">
+      <h3 class="font-serif text-[26px] font-normal tracking-[-0.02em] m-0 mb-1">Create an account</h3>
+      <label class="flex flex-col gap-2 label !text-[11px] text-muted">Name
+        <input type="text" required class="font-sans normal-case tracking-normal text-[15px] text-ink border border-line rounded-lg px-4 py-3 bg-paper" />
+      </label>
+      <label class="flex flex-col gap-2 label !text-[11px] text-muted">Email
+        <input type="email" required class="font-sans normal-case tracking-normal text-[15px] text-ink border border-line rounded-lg px-4 py-3 bg-paper" />
+      </label>
+      <label class="flex flex-col gap-2 label !text-[11px] text-muted">Password
+        <input type="password" required class="font-sans normal-case tracking-normal text-[15px] text-ink border border-line rounded-lg px-4 py-3 bg-paper" />
+      </label>
+      <button type="submit" class="mt-2 border border-ink bg-ink text-paper rounded-full px-8 py-[15px] text-[15px] font-medium cursor-pointer hover:bg-[#3d342b] hover:border-[#3d342b]">Sign up</button>
+    </form>
+
+    <p class="text-[13px] text-muted mt-6 mb-0">
+      <span id="promptLogin">New here? <a href="#" id="switchToSignup" class="text-rustd">Create an account</a></span>
+      <span id="promptSignup" class="hidden">Already have an account? <a href="#" id="switchToLogin" class="text-rustd">Log in</a></span>
+    </p>
+  </div>
+</div>
+
+<div class="max-w-[1180px] mx-auto px-14">
+  <div class="pt-[84px] pb-[72px] border-b border-rule">
+    <div class="font-serif italic text-[19px] text-rustd mb-6">Practice, not tutorials</div>
+    <h1 class="font-serif font-normal text-[86px] leading-[1.02] tracking-[-0.03em] m-0 max-w-[24em] text-balance">Answer questions until the exam is boring.</h1>
+    <p class="font-serif text-[22px] leading-[1.55] text-ink2 mt-9 mb-0 max-w-[30em] text-pretty">Exam-style sets for AWS, Google Cloud and Kubernetes. One question a page, scored by domain when you reach the end.</p>
+  </div>
+
+  <div class="flex flex-wrap items-center justify-between gap-5 py-[22px] border-b border-rule">
+    <div class="flex flex-wrap gap-[26px]">
+      {% for tab in tabs %}
+        <a href="/?provider={{ tab.key }}" class="pb-1 label !text-[13px] font-medium no-underline border-b-2 {% if tab.active %}border-ink text-ink{% else %}border-transparent text-muted hover:text-ink{% endif %}">{{ tab.label }}</a>
+      {% endfor %}
+    </div>
+    <div class="label text-muted">{{ count_label }}</div>
+  </div>
+
+  {% for cert in certs %}
+    <a href="/quiz/{{ cert.id }}" class="block no-underline text-ink border-b border-rule py-8 grid grid-cols-[128px_minmax(0,1fr)_220px] gap-10 items-baseline hover:bg-[#f1e9da]">
+      <span class="label text-rustd">{{ cert.code }}</span>
+      <span>
+        <span class="block font-serif text-[34px] leading-[1.15] tracking-[-0.02em]">{{ cert.name }}</span>
+        <span class="block font-serif text-[18px] leading-[1.5] text-[#6b6157] mt-2.5 max-w-[44em] text-pretty">{{ cert.blurb }}</span>
+      </span>
+      <span class="text-right text-[13px] leading-[1.9] text-muted">
+        <span class="block">{{ cert.provider_label }}</span>
+        <span class="block">{{ cert.count }} questions · {{ cert.difficulty }}</span>
+        <span class="block text-ink">{{ cert.best_label }}</span>
+      </span>
+    </a>
+  {% endfor %}
+
+  {% if history | length > 0 %}
+    <div class="pt-14">
+      <h2 class="font-serif font-normal text-[30px] tracking-[-0.02em] m-0">Recent attempts</h2>
+      {% for h in history %}
+        <div class="grid grid-cols-[minmax(0,1fr)_110px_90px_80px] gap-5 items-baseline py-3.5 border-b border-hair">
+          <div class="font-serif text-[20px]">{{ h.name }}</div>
+          <div class="text-[13px] text-muted">{{ h.when }}</div>
+          <div class="text-[13px] text-muted">{{ h.time }}</div>
+          <div class="font-serif text-[22px] text-right">{{ h.pct }}%</div>
+        </div>
+      {% endfor %}
+    </div>
+  {% endif %}
+</div>
+
+<div class="bg-band border-t border-edge mt-[84px]">
+  <div class="max-w-[1180px] mx-auto px-14 py-[52px] flex flex-wrap items-center justify-between gap-7">
+    <div>
+      <div class="font-serif text-[27px] tracking-[-0.02em]">Not sure where you stand?</div>
+      <div class="label !text-[13px] text-muted2 mt-2.5">Drill · {{ total_questions }} questions across {{ tracks }} tracks</div>
+    </div>
+    <a href="/quiz/{{ first_cert }}" class="border border-line bg-paper px-[30px] py-[18px] font-serif text-[19px] rounded-full no-underline text-ink hover:bg-ink hover:text-paper hover:border-ink">Start the first track, cold →</a>
+  </div>
+</div>
+
+{% include "partials/foot.html" %}

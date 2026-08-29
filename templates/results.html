@@ -1,0 +1,58 @@
+{% set title = cert_code ~ " — result" %}{% include "partials/head.html" %}
+
+<div class="max-w-[1180px] mx-auto px-14">
+  <div class="pt-[84px] pb-16 border-b border-rule grid grid-cols-[minmax(0,1fr)_300px] gap-[60px] items-end">
+    <div>
+      <div class="label !text-[12px] !tracking-[0.14em] text-rustd">{{ cert_code }} · complete</div>
+      <div class="font-serif font-light text-[150px] leading-[0.86] tracking-[-0.05em] mt-7">{{ pct }}<span class="text-[58px] text-faint">%</span></div>
+      <p class="font-serif text-[22px] leading-[1.55] text-ink2 mt-[30px] mb-0 max-w-[28em] text-pretty">{{ verdict }}</p>
+    </div>
+    <div class="text-[14px]">
+      <div class="flex justify-between py-3 border-t border-ink"><span class="text-muted">Correct</span><span class="font-semibold">{{ correct_count }}</span></div>
+      <div class="flex justify-between py-3 border-t border-hair"><span class="text-muted">Incorrect</span><span class="font-semibold">{{ wrong_count }}</span></div>
+      <div class="flex justify-between py-3 border-t border-hair"><span class="text-muted">Skipped</span><span class="font-semibold">{{ skipped_count }}</span></div>
+      <div class="flex justify-between py-3 border-t border-hair"><span class="text-muted">Elapsed</span><span class="font-semibold">{{ elapsed_label }}</span></div>
+    </div>
+  </div>
+
+  <div class="pt-14">
+    <h2 class="font-serif font-normal text-[30px] tracking-[-0.02em] mt-0 mb-[18px]">By domain</h2>
+    {% for d in domains %}
+      <div class="grid grid-cols-[minmax(0,320px)_1fr_80px] gap-[30px] items-center py-3 border-b border-hair">
+        <div class="font-serif text-[19px] text-pretty">{{ d.name }}</div>
+        <div class="h-1.5 bg-hair"><div class="h-1.5 {{ d.bar_class }}" style="width: {{ d.pct }}%"></div></div>
+        <div class="text-[14px] text-right text-ink2">{{ d.label }}</div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="pt-14">
+    <h2 class="font-serif font-normal text-[30px] tracking-[-0.02em] mt-0 mb-2">Review</h2>
+    {% for r in review %}
+      <div class="grid grid-cols-[52px_minmax(0,1fr)_minmax(0,400px)] gap-[34px] py-[26px] border-b border-hair items-start">
+        <div class="font-serif text-[20px] text-faint">{{ r.num }}</div>
+        <div>
+          <div class="label-sm font-semibold {% if r.ok %}text-ink{% else %}text-rustd{% endif %}">{{ r.status }}</div>
+          <div class="font-serif text-[21px] leading-[1.45] mt-2.5 text-pretty">{{ r.question }}</div>
+        </div>
+        <div class="flex flex-col gap-2.5 text-[15px] leading-[1.5]">
+          <div class="grid grid-cols-[60px_1fr] gap-3.5">
+            <span class="label-sm !text-[11px] text-muted pt-1">yours</span>
+            <span class="{% if r.ok %}text-ink{% else %}text-rustd{% endif %}">{{ r.yours }}</span>
+          </div>
+          <div class="grid grid-cols-[60px_1fr] gap-3.5">
+            <span class="label-sm !text-[11px] text-muted pt-1">correct</span>
+            <span class="font-semibold">{{ r.correct }}</span>
+          </div>
+        </div>
+      </div>
+    {% endfor %}
+  </div>
+
+  <div class="flex flex-wrap gap-3.5 pt-11 pb-24">
+    <a href="/quiz/{{ cert_id }}" class="border border-ink bg-ink text-paper rounded-full px-8 py-[15px] text-[15px] font-medium no-underline hover:bg-[#3d342b]">Retake this set</a>
+    <a href="/" class="border border-line bg-transparent rounded-full px-[30px] py-[15px] text-[15px] no-underline text-ink hover:border-ink">All certifications</a>
+  </div>
+</div>
+
+{% include "partials/foot.html" %}

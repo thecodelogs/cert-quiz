@@ -1,0 +1,135 @@
+{% set title = "Dashboard — Drill admin" %}{% include "admin/partials/head.html" %}
+<div class="grid grid-cols-[252px_minmax(0,1fr)] min-w-[1260px]">
+{% include "admin/partials/sidebar.html" %}
+  <main>
+    <div class="bg-band border-b border-edge">
+      <div class="px-9 py-[18px] flex flex-wrap items-center justify-between gap-5">
+        <div class="flex items-baseline gap-4">
+          <span class="font-serif text-[25px] tracking-[-0.02em]">Dashboard</span>
+          <span class="label text-muted2">{{ today }}</span>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <a href="/admin/import" class="border border-line bg-paper px-4 py-2 text-[13px] rounded-full no-underline text-ink hover:border-ink">Import questions</a>
+          <a href="/admin/questions/new" class="border border-ink bg-ink text-paper px-[18px] py-2 text-[13px] font-medium rounded-full no-underline hover:bg-[#3d342b] hover:border-[#3d342b]">New question</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-9 pb-14">
+      <div class="overflow-hidden border-b border-rule">
+        <div class="grid grid-cols-5 w-[calc(100%+1px)]">
+          <div class="pt-6 pr-6 pb-[22px] border-r border-hair">
+            <div class="font-serif text-[40px] leading-none tracking-[-0.03em] text-ink">{{ stats.live_questions }}</div>
+            <div class="label text-muted2 mt-[9px]">Live questions</div>
+            <div class="text-[12px] text-muted mt-1">{{ stats.published_tracks }} of {{ stats.total_tracks }} tracks published</div>
+          </div>
+          <div class="pt-6 pr-6 pb-[22px] border-r border-hair">
+            <div class="font-serif text-[40px] leading-none tracking-[-0.03em] text-ink">{{ stats.drafts }}</div>
+            <div class="label text-muted2 mt-[9px]">Drafts</div>
+            <div class="text-[12px] text-muted mt-1">Not visible to learners</div>
+          </div>
+          <div class="pt-6 pr-6 pb-[22px] border-r border-hair">
+            <div class="font-serif text-[40px] leading-none tracking-[-0.03em] text-rustd">{{ stats.flagged }}</div>
+            <div class="label text-muted2 mt-[9px]">Flagged</div>
+            <div class="text-[12px] text-muted mt-1">Reported by learners</div>
+          </div>
+          <div class="pt-6 pr-6 pb-[22px] border-r border-hair">
+            <div class="font-serif text-[40px] leading-none tracking-[-0.03em] text-ink">{{ stats.attempts_30d }}</div>
+            <div class="label text-muted2 mt-[9px]">Attempts · 30d</div>
+            <div class="text-[12px] text-muted mt-1">Finished attempts in the last 30 days</div>
+          </div>
+          <div class="pt-6 pr-6 pb-[22px] border-r border-hair">
+            <div class="font-serif text-[40px] leading-none tracking-[-0.03em] {% if stats.mean_score_30d < stats.pass_mark %}text-rustd{% else %}text-ink{% endif %}">{{ stats.mean_score_30d }}%</div>
+            <div class="label text-muted2 mt-[9px]">Mean score</div>
+            <div class="text-[12px] text-muted mt-1">Pass mark is {{ stats.pass_mark }}%</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid grid-cols-[minmax(0,1.55fr)_minmax(0,1fr)] gap-11 pt-[34px]">
+        <div>
+          <div class="flex items-baseline justify-between gap-4 border-b border-ink pb-[9px]">
+            <h2 class="font-serif font-normal text-[22px] tracking-[-0.02em] m-0">Needs attention</h2>
+          </div>
+          {% for item in attention %}
+          <div class="grid grid-cols-[92px_minmax(0,1fr)_132px] gap-5 py-[15px] border-b border-hair items-start">
+            <div>
+              <div class="label font-semibold {% if item.kind == "Draft" %}text-ink{% else %}text-rustd{% endif %}">{{ item.kind }}</div>
+              <div class="text-[11px] tracking-[0.08em] text-faint mt-[5px]">{{ item.cert_code }}</div>
+            </div>
+            <div>
+              <div class="font-serif text-[17px] leading-[1.4] text-pretty">{{ item.question }}</div>
+              <div class="text-[12px] text-muted mt-1.5">{{ item.detail }}</div>
+            </div>
+            <div class="flex flex-col items-end gap-[7px]">
+              <span class="text-[12px] text-muted">{{ item.when }}</span>
+              <a href="/admin/flagged" class="border border-line px-[13px] py-[5px] text-[12px] rounded-full no-underline text-ink hover:border-ink hover:bg-[#f1e9da]">{{ item.action_label }}</a>
+            </div>
+          </div>
+          {% else %}
+          <div class="py-[15px] text-[13.5px] text-muted">Nothing needs attention right now.</div>
+          {% endfor %}
+        </div>
+
+        <div class="flex flex-col gap-[34px]">
+          <div>
+            <h2 class="font-serif font-normal text-[22px] tracking-[-0.02em] mt-0 mb-[9px] border-b border-ink pb-[9px]">Weakest domains</h2>
+            <div class="text-[12px] text-muted mt-3 mb-3.5">Lowest learner accuracy over the last 30 days.</div>
+            {% for d in weak_domains %}
+            <div class="grid grid-cols-[minmax(0,1fr)_56px] gap-3.5 items-center py-[9px] border-b border-hair">
+              <div>
+                <div class="text-[13.5px] text-pretty">{{ d.name }}</div>
+                <div class="h-1 bg-hair mt-[7px]"><div class="h-1 {% if d.pct < stats.pass_mark %}bg-rust{% else %}bg-ink{% endif %}" style="width: {{ d.pct }}%"></div></div>
+              </div>
+              <div class="cell text-right text-ink2">{{ d.pct }}%</div>
+            </div>
+            {% else %}
+            <div class="text-[13px] text-muted py-2">No attempts in the last 30 days yet.</div>
+            {% endfor %}
+          </div>
+
+          {% if last_import %}
+          <div class="border border-edge bg-band px-[22px] py-5">
+            <div class="label !tracking-[0.14em] text-muted2">Last import</div>
+            <div class="font-serif text-[19px] leading-[1.35] mt-2.5">{{ last_import.summary }}</div>
+            <div class="text-[12px] text-muted mt-2">{{ last_import.when }} · {{ last_import.outcome }}</div>
+            <a href="/admin/import" class="inline-block border border-line bg-paper px-4 py-2 text-[13px] rounded-full no-underline text-ink hover:border-ink mt-4">Paste CSV or JSON</a>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="pt-[46px]">
+        <div class="flex items-baseline justify-between gap-4 border-b border-ink pb-[9px]">
+          <h2 class="font-serif font-normal text-[22px] tracking-[-0.02em] m-0">Tracks</h2>
+          <span class="label text-muted2">{{ stats.total_tracks }} tracks · {{ stats.live_questions }} questions</span>
+        </div>
+        <div class="grid grid-cols-[104px_minmax(0,1fr)_92px_88px_92px_108px_120px] gap-[18px] pt-[11px] pb-[9px] border-b border-hair label text-muted2">
+          <div>Code</div><div>Track</div>
+          <div class="text-right">Live</div><div class="text-right">Drafts</div>
+          <div class="text-right">Flagged</div><div class="text-right">Mean score</div>
+          <div class="text-right">Status</div>
+        </div>
+        {% for t in tracks %}
+        <div class="grid grid-cols-[104px_minmax(0,1fr)_92px_88px_92px_108px_120px] gap-[18px] py-[13px] border-b border-hair items-center">
+          <div class="text-[12px] tracking-[0.08em] text-rustd">{{ t.code }}</div>
+          <div>
+            <div class="font-serif text-[18px] leading-[1.3]">{{ t.name }}</div>
+            <div class="text-[12px] text-muted mt-[3px]">{{ t.provider_label }} · edited {{ t.edited }}</div>
+          </div>
+          <div class="text-right text-[14px]">{{ t.live }}</div>
+          <div class="text-right text-[14px] {% if t.drafts > 0 %}text-ink{% else %}text-faint{% endif %}">{{ t.drafts }}</div>
+          <div class="text-right text-[14px] {% if t.flagged > 0 %}text-rustd{% else %}text-faint{% endif %}">{{ t.flagged }}</div>
+          <div class="text-right text-[14px]">{{ t.mean_score }}%</div>
+          <div class="text-right">
+            <form method="post" action="/admin/tracks/{{ t.slug }}/toggle-published">
+              <button class="border px-3.5 py-[5px] label rounded-full cursor-pointer {% if t.published %}border-ink bg-ink text-paper{% else %}border-line text-muted{% endif %}">{% if t.published %}Published{% else %}Draft{% endif %}</button>
+            </form>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </main>
+</div>
+{% include "admin/partials/foot.html" %}

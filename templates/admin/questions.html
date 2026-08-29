@@ -1,0 +1,64 @@
+{% set title = "Questions — Drill admin" %}{% include "admin/partials/head.html" %}
+<div class="grid grid-cols-[252px_minmax(0,1fr)] min-w-[1260px]">
+{% include "admin/partials/sidebar.html" %}
+  <main>
+    <div class="bg-band border-b border-edge">
+      <div class="px-9 py-[18px] flex flex-wrap items-center justify-between gap-5">
+        <div class="flex items-baseline gap-4">
+          <span class="font-serif text-[25px] tracking-[-0.02em]">Questions</span>
+          <span class="label text-muted2">{{ total }} across {{ track_count }} tracks</span>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <a href="/admin/import" class="border border-line bg-paper px-4 py-2 text-[13px] rounded-full no-underline text-ink hover:border-ink">Import questions</a>
+          <a href="/admin/questions/new{% if filter_track %}?track={{ filter_track }}{% endif %}" class="border border-ink bg-ink text-paper px-[18px] py-2 text-[13px] font-medium rounded-full no-underline hover:bg-[#3d342b] hover:border-[#3d342b]">New question</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-9 pb-[72px]">
+      <div class="flex flex-wrap items-center justify-between gap-4 py-[18px] border-b border-rule">
+        <form class="flex flex-wrap items-center gap-2.5" method="get" action="/admin/questions">
+          <input name="q" value="{{ filter_q }}" placeholder="Search question text or track code" class="border border-line bg-field px-3 py-2 text-[13px] w-[300px]" />
+          <select name="track" onchange="this.form.submit()" class="border border-line bg-field px-2.5 py-2 text-[13px]">
+            <option value="">All tracks</option>
+            {% for t in track_options %}
+            <option value="{{ t.slug }}" {% if t.slug == filter_track %}selected{% endif %}>{{ t.code }} · {{ t.name }}</option>
+            {% endfor %}
+          </select>
+          <div class="flex border border-line">
+            <button type="submit" name="status" value="" class="border-0 border-r border-edge px-3.5 py-2 label cursor-pointer {% if filter_status == "" %}bg-ink text-paper{% else %}bg-transparent text-muted{% endif %}">All</button>
+            <button type="submit" name="status" value="live" class="border-0 border-r border-edge px-3.5 py-2 label cursor-pointer {% if filter_status == "live" %}bg-ink text-paper{% else %}bg-transparent text-muted{% endif %}">Live</button>
+            <button type="submit" name="status" value="draft" class="border-0 px-3.5 py-2 label cursor-pointer {% if filter_status == "draft" %}bg-ink text-paper{% else %}bg-transparent text-muted{% endif %}">Draft</button>
+          </div>
+        </form>
+        <div class="label text-muted2">{{ rows | length }} of {{ total }} shown</div>
+      </div>
+
+      <div class="overflow-x-auto">
+        <div class="grid grid-cols-[minmax(360px,1fr)_92px_148px_68px_88px_80px_76px_88px] gap-3.5 min-w-[1180px] pt-3 pb-[9px] border-b border-ink">
+          {% for col in sort_cols %}
+          <a href="?{{ base_qs | safe }}sort={{ col.key }}&amp;dir={% if sort == col.key and dir == "asc" %}desc{% else %}asc{% endif %}" class="flex items-center {% if col.key == 'question' %}justify-start{% elif col.key == 'answered' or col.key == 'correct' or col.key == 'edited' %}justify-end{% else %}justify-start{% endif %} label no-underline {% if sort == col.key %}text-ink font-semibold{% else %}text-muted2 hover:text-ink{% endif %}">{{ col.label }}{% if sort == col.key %} {% if dir == "asc" %}↓{% else %}↑{% endif %}{% endif %}</a>
+          {% endfor %}
+        </div>
+
+        {% for r in rows %}
+        <div class="grid grid-cols-[minmax(360px,1fr)_92px_148px_68px_88px_80px_76px_88px] gap-3.5 min-w-[1180px] py-3 border-b border-hair items-center {% if r.status == "draft" %}bg-draftrow{% endif %}">
+          <a href="/admin/questions/{{ r.id }}" class="text-left border-0 bg-transparent p-0 cursor-pointer font-serif text-[16.5px] leading-[1.35] text-ink hover:text-rustd truncate no-underline">{{ r.body }}</a>
+          <div class="text-[12px] tracking-[0.06em] text-rustd">{{ r.cert_code }}</div>
+          <div class="text-[12.5px] text-ink2 truncate">{{ r.domain }}</div>
+          <div class="text-[12px] text-muted">{{ r.kind }}</div>
+          <div><span class="text-[10.5px] tracking-[0.1em] uppercase border px-2 py-[3px] {% if r.status == "live" %}text-muted border-line{% elif r.status == "draft" %}text-rustd border-rustd{% else %}text-faint border-line{% endif %}">{{ r.status }}</span></div>
+          <div class="cell text-right text-ink2">{% if r.answered > 0 %}{{ r.answered }}{% else %}—{% endif %}</div>
+          <div class="cell text-right {% if r.correct_pct and r.correct_pct < 50 %}text-rustd{% else %}text-ink2{% endif %}">{% if r.correct_pct %}{{ r.correct_pct }}%{% else %}—{% endif %}</div>
+          <div class="text-[12px] text-right text-muted">{{ r.edited }}</div>
+        </div>
+        {% else %}
+        <div class="py-8 text-[13.5px] text-muted">No questions match this filter.</div>
+        {% endfor %}
+      </div>
+    </div>
+  </main>
+
+{% include "admin/partials/drawer.html" %}
+</div>
+{% include "admin/partials/foot.html" %}

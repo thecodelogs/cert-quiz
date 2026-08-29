@@ -1,0 +1,98 @@
+{% if drawer_open %}
+    <div id="drawer" class="fixed inset-0 z-40">
+      <a href="/admin/questions" aria-label="Close editor" class="absolute inset-0 border-0 bg-[rgba(36,31,26,0.28)] cursor-pointer block"></a>
+
+      <div class="absolute top-0 right-0 bottom-0 w-[560px] bg-paper border-l border-line shadow-[-18px_0_46px_rgba(36,31,26,0.16)] flex flex-col">
+        <form method="post" action="{% if drawer_mode == 'edit' %}/admin/questions/{{ q_id }}{% else %}/admin/questions/new{% endif %}" class="flex flex-col flex-1 min-h-0">
+        <div class="bg-band border-b border-edge px-6 py-4 flex items-center justify-between gap-4">
+          <div>
+            <div class="font-serif text-[21px] tracking-[-0.02em]">{% if drawer_mode == 'edit' %}Edit question{% else %}New question{% endif %}</div>
+            <div class="label text-muted2 mt-1">{{ cert_code }}{% if drawer_mode == 'edit' %} · #{{ q_id }}{% endif %}</div>
+          </div>
+          <a href="/admin/questions" class="border-0 bg-transparent p-0 label !tracking-[0.14em] text-muted hover:text-rustd cursor-pointer no-underline">Close</a>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6">
+          <div class="flex flex-col gap-[22px]">
+            {% if drawer_error %}
+              <div class="text-[13px] text-rustd border border-rustd bg-paper px-3 py-2">{{ drawer_error }}</div>
+            {% endif %}
+
+            <input type="hidden" name="cert_slug" value="{{ cert_slug }}" />
+
+            <div>
+              <div class="label text-muted2 mb-2">Question</div>
+              <textarea name="body" required class="w-full h-24 border border-line bg-field px-3.5 py-3 font-serif text-[17px] leading-[1.45] resize-y">{{ body }}</textarea>
+            </div>
+
+            <div>
+              <div class="flex items-baseline justify-between gap-3 mb-2">
+                <span class="label text-muted2">Options</span>
+                <span class="text-[12px] text-muted">Check every correct option. Leave unused rows blank.</span>
+              </div>
+              <div class="flex flex-col gap-[7px]">
+                {% for opt in options %}
+                <div class="grid grid-cols-[34px_minmax(0,1fr)_30px] gap-2 items-center">
+                  <label title="Mark correct" class="h-[34px] border font-serif text-[15px] cursor-pointer flex items-center justify-center {% if opt.correct %}border-ink bg-ink text-paper{% else %}border-line bg-transparent text-faint{% endif %}">
+                    <input type="checkbox" name="correct" value="{{ opt.letter }}" {% if opt.correct %}checked{% endif %} class="sr-only" />{{ opt.letter }}
+                  </label>
+                  <input name="option_{{ opt.letter }}" value="{{ opt.body }}" class="border border-line bg-field px-[11px] py-2 text-[14px]" />
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+
+            <div class="grid grid-cols-[minmax(0,1fr)_132px] gap-3">
+              <div>
+                <div class="label text-muted2 mb-2">Domain</div>
+                <select name="domain" class="w-full border border-line bg-field px-2.5 py-[9px] text-[13.5px]">
+                  {% for d in domains %}
+                  <option {% if d.selected %}selected{% endif %}>{{ d.name }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div>
+                <div class="label text-muted2 mb-2">Difficulty</div>
+                <select name="difficulty" class="w-full border border-line bg-field px-2.5 py-[9px] text-[13.5px]">
+                  <option {% if difficulty == "Easy" %}selected{% endif %}>Easy</option>
+                  <option {% if difficulty == "Medium" %}selected{% endif %}>Medium</option>
+                  <option {% if difficulty == "Hard" %}selected{% endif %}>Hard</option>
+                </select>
+              </div>
+            </div>
+
+            <div>
+              <div class="label text-muted2 mb-2">Explanation</div>
+              <textarea name="explain" class="w-full h-[92px] border border-line bg-field px-3.5 py-3 text-[14px] leading-[1.6] resize-y">{{ explain }}</textarea>
+            </div>
+
+            <div>
+              <div class="label text-muted2 mb-2">Tags</div>
+              <input name="tags" value="{{ tags }}" placeholder="s3, lifecycle, cost (comma separated)" class="w-full border border-line bg-field px-[11px] py-[9px] text-[13.5px]" />
+            </div>
+
+            <div>
+              <div class="label text-muted2 mb-2">Status</div>
+              <div class="flex border border-line w-fit">
+                <label class="border-0 border-r border-edge px-5 py-2 text-[11.5px] tracking-[0.1em] uppercase cursor-pointer {% if status == 'draft' %}bg-ink text-paper{% else %}bg-transparent text-muted{% endif %}">
+                  <input type="radio" name="status" value="draft" {% if status == 'draft' %}checked{% endif %} class="sr-only" />Draft
+                </label>
+                <label class="border-0 px-5 py-2 text-[11.5px] tracking-[0.1em] uppercase cursor-pointer {% if status != 'draft' %}bg-ink text-paper{% else %}bg-transparent text-muted{% endif %}">
+                  <input type="radio" name="status" value="live" {% if status != 'draft' %}checked{% endif %} class="sr-only" />Live
+                </label>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t border-edge bg-band px-6 py-3.5 flex items-center justify-between gap-4">
+          <div class="text-[12px] text-muted">{% if status == 'draft' %}Draft — not visible to learners{% else %}Ready to publish{% endif %}</div>
+          <div class="flex gap-2">
+            <a href="/admin/questions" class="border border-line bg-paper px-[18px] py-[9px] text-[13px] rounded-full no-underline text-ink hover:border-ink">Cancel</a>
+            <button type="submit" class="border border-ink bg-ink text-paper px-5 py-[9px] text-[13px] font-medium rounded-full cursor-pointer hover:bg-[#3d342b]">Save</button>
+          </div>
+        </div>
+        </form>
+      </div>
+    </div>
+{% endif %}
