@@ -1,0 +1,49 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04   # match the server's Ubuntu version so glibc lines up
+    env:
+      SQLX_OFFLINE: "true"  # only needed if you use sqlx::query! macros
+      BIN_NAME: drill
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Test
+        run: cargo test --release
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Upload binary
+        run: |
+          scp target/release/$BIN_NAME \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/drill/$BIN_NAME.new
+
+      - name: Swap and restart
+        run: |
+          ssh ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "
+            set -e
+            chmod +x /opt/drill/$BIN_NAME.new
+            mv /opt/drill/$BIN_NAME.new /opt/drill/$BIN_NAME
+            sudo systemctl restart drill
+            sleep 3
+            sudo systemctl status drill --no-pager
+          "
