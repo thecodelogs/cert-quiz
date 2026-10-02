@@ -32,10 +32,15 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Upload binary
+      - name: Upload binary and assets
         run: |
+          # Tera and ServeDir read templates/ and static/ from disk at runtime,
+          # so they have to ship alongside the binary.
+          tar czf assets.tgz templates static
           scp target/release/$BIN_NAME \
             ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/drill/$BIN_NAME.new
+          scp assets.tgz \
+            ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }}:/opt/drill/assets.tgz
 
       - name: Swap and restart
         run: |
@@ -43,6 +48,9 @@ jobs:
             set -e
             chmod +x /opt/drill/$BIN_NAME.new
             mv /opt/drill/$BIN_NAME.new /opt/drill/$BIN_NAME
+            rm -rf /opt/drill/templates /opt/drill/static
+            tar xzf /opt/drill/assets.tgz -C /opt/drill
+            rm /opt/drill/assets.tgz
             sudo systemctl restart drill
             sleep 3
             sudo systemctl status drill --no-pager

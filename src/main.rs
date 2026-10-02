@@ -40,6 +40,14 @@ async fn main() {
         .expect("failed to run migrations");
 
     let tera = Tera::new("templates/**/*.html").expect("template parse error");
+    // An unmatched glob yields an empty Tera rather than an error, which only
+    // surfaces later as TemplateNotFound — fail at startup instead.
+    if tera.get_template_names().next().is_none() {
+        panic!(
+            "no templates found under {}/templates",
+            std::env::current_dir().unwrap_or_default().display()
+        );
+    }
     let state = Arc::new(AppState { tera, db });
 
     let app = Router::new()
