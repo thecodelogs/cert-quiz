@@ -29,7 +29,7 @@
       {% endif %}
       <div class="flex flex-wrap items-center justify-between gap-4 py-[18px] border-b border-rule">
         <form class="flex flex-wrap items-center gap-2.5" method="get" action="/admin/questions">
-          <input name="q" value="{{ filter_q }}" placeholder="Search questions or track code" class="border border-line bg-field px-3 py-2 text-[13px] w-[230px]" />
+          <input type="search" id="question-search" name="q" value="{{ filter_q }}" placeholder="Search questions or track code" autocomplete="off" aria-label="Search questions or track code" class="border border-line bg-field px-3 py-2 text-[13px] w-[230px]" />
           <select name="track" onchange="this.form.submit()" class="border border-line bg-field px-2.5 py-2 text-[13px] max-w-[210px]">
             <option value="">All tracks</option>
             {% for t in track_options %}
@@ -116,6 +116,36 @@
 
 {% include "admin/partials/drawer.html" %}
 <script>
+  /* search as you type: submit the filter form once typing pauses, then put
+     the cursor back in the box after the page reloads */
+  (function () {
+    var input = document.getElementById('question-search');
+    if (!input) return;
+    var KEY = 'drill-question-search-focus';
+    var timer = null;
+    var last = input.value;
+
+    try {
+      if (sessionStorage.getItem(KEY)) {
+        sessionStorage.removeItem(KEY);
+        input.focus();
+        var end = input.value.length;
+        input.setSelectionRange(end, end);
+      }
+    } catch (e) { /* storage blocked: the search still works, just without refocus */ }
+
+    input.addEventListener('input', function () {
+      clearTimeout(timer);
+      timer = setTimeout(function () {
+        var value = input.value.trim();
+        if (value === last.trim()) return;
+        last = input.value;
+        try { sessionStorage.setItem(KEY, '1'); } catch (e) {}
+        input.form.submit();
+      }, 350);
+    });
+  })();
+
   /* bulk select: keep the "Delete selected" button and select-all box in step with the row checkboxes */
   (function () {
     var all = document.getElementById('select-all');

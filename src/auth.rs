@@ -16,6 +16,9 @@ use uuid::Uuid;
 /// same session plus a role check, so logging in on either side counts for both.
 pub const SESSION_COOKIE: &str = "drill_session";
 
+/// Shortest password accepted at signup and when an admin sets one.
+pub const MIN_PASSWORD_LEN: usize = 8;
+
 pub fn hash_password(password: &str) -> String {
     Argon2::default()
         .hash_password(password.as_bytes())

@@ -16,6 +16,9 @@
     </div>
 
     <div class="px-9 pb-[72px]">
+      {% if notice %}
+      <div role="status" class="mt-5 border border-line bg-band px-4 py-3 text-[13.5px] text-ink2">{{ notice }}</div>
+      {% endif %}
       <div class="flex flex-wrap items-center justify-between gap-4 py-[18px] border-b border-rule">
         <form method="get" action="/admin/users">
           <input name="q" value="{{ filter_q }}" placeholder="Search name or email" class="border border-line bg-field px-3 py-2 text-[13px] w-[280px]" />
@@ -23,17 +26,18 @@
         <div class="label text-muted2">{{ rows | length }} shown</div>
       </div>
 
-      <div class="grid grid-cols-[minmax(0,1fr)_96px_92px_96px_104px_108px] gap-[18px] pt-3 pb-[9px] border-b border-ink label text-muted2">
+      <div class="grid grid-cols-[minmax(0,1fr)_96px_92px_96px_104px_108px_60px] gap-[18px] pt-3 pb-[9px] border-b border-ink label text-muted2">
         <div>User</div>
         <div>Role</div>
         <div class="text-right">Attempts</div>
         <div class="text-right">Mean score</div>
         <div class="text-right">Last active</div>
         <div class="text-right">Access</div>
+        <div><span class="sr-only">Edit</span></div>
       </div>
 
       {% for u in rows %}
-      <div class="grid grid-cols-[minmax(0,1fr)_96px_92px_96px_104px_108px] gap-[18px] py-[13px] border-b border-hair items-center">
+      <div class="grid grid-cols-[minmax(0,1fr)_96px_92px_96px_104px_108px_60px] gap-[18px] py-[13px] border-b border-hair items-center">
         <div>
           <div class="text-[14.5px] font-medium">{{ u.name }}</div>
           <div class="text-[12px] text-muted mt-0.5">{{ u.email }}</div>
@@ -48,11 +52,15 @@
             <button class="border px-3 py-[5px] label rounded-full cursor-pointer {% if u.status == "suspended" %}border-ink bg-ink text-paper{% else %}border-line text-muted{% endif %}">{% if u.status == "suspended" %}Suspended{% else %}Active{% endif %}</button>
           </form>
         </div>
+        <div class="text-right">
+          <a href="/admin/users/{{ u.id }}" class="border border-line px-3 py-[5px] label rounded-full no-underline text-ink hover:border-ink">Edit</a>
+        </div>
       </div>
       {% else %}
       <div class="py-8 text-[13.5px] text-muted">No users match this search.</div>
       {% endfor %}
     </div>
   </main>
+{% include "admin/partials/user_drawer.html" %}
 </div>
 {% include "admin/partials/foot.html" %}

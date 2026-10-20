@@ -27,6 +27,7 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/flagged", get(flagged_page).post(flagged_action))
         .route("/import", get(import_page).post(import_submit))
         .route("/users", get(users_page).post(users_toggle))
+        .route("/users/:id", get(user_edit_page).post(user_update))
         .route("/tracks/:slug/toggle-published", post(track_toggle_published))
 }
 
@@ -873,19 +874,97 @@ async fn import_submit(State(state): State<Arc<AppState>>, admin: AdminUser, bod
 #[derive(Deserialize)]
 struct UsersQuery {
     q: Option<String>,
+    saved: Option<String>,
 }
 
 async fn users_page(State(state): State<Arc<AppState>>, admin: AdminUser, Query(uq): Query<UsersQuery>) -> Response {
+    let mut ctx = users_list_ctx(&state, &admin, uq.q.as_deref().unwrap_or("")).await;
+    let notice = match uq.saved.as_deref() {
+        Some("1") => Some("User saved."),
+        Some("password") => Some("User saved. Their password was changed, so they've been logged out of any other devices."),
+        _ => None,
+    };
+    ctx.insert("notice", &notice);
+    render(&state, "admin/users.html", &ctx)
+}
+
+async fn users_list_ctx(state: &AppState, admin: &AdminUser, q: &str) -> Context {
     let mut rows = db::admin_users(&state.db).await;
-    if let Some(q) = &uq.q {
-        let needle = q.to_lowercase();
-        if !needle.is_empty() {
-            rows.retain(|r| r.name.to_lowercase().contains(&needle) || r.email.to_lowercase().contains(&needle));
-        }
+    let needle = q.to_lowercase();
+    if !needle.is_empty() {
+        rows.retain(|r| r.name.to_lowercase().contains(&needle) || r.email.to_lowercase().contains(&needle));
     }
-    let mut ctx = sidebar_context(&state, "users", &admin).await;
+    let mut ctx = sidebar_context(state, "users", admin).await;
     ctx.insert("rows", &rows);
-    ctx.insert("filter_q", &uq.q.unwrap_or_default());
+    ctx.insert("filter_q", q);
+    ctx.insert("user_drawer_open", &false);
+    ctx
+}
+
+/// Values for the edit-user panel, open over the users list.
+fn insert_user_drawer(ctx: &mut Context, id: Uuid, name: &str, email: &str, error: Option<&str>) {
+    ctx.insert("user_drawer_open", &true);
+    ctx.insert("edit_id", &id.to_string());
+    ctx.insert("edit_name", name);
+    ctx.insert("edit_email", email);
+    ctx.insert("edit_error", &error);
+}
+
+async fn user_edit_page(State(state): State<Arc<AppState>>, admin: AdminUser, Path(id): Path<String>) -> Response {
+    let Ok(id) = Uuid::parse_str(&id) else {
+        return Redirect::to("/admin/users").into_response();
+    };
+    let Some((name, email)) = db::user_for_edit(&state.db, id).await else {
+        return Redirect::to("/admin/users").into_response();
+    };
+    let mut ctx = users_list_ctx(&state, &admin, "").await;
+    insert_user_drawer(&mut ctx, id, &name, &email, None);
+    render(&state, "admin/users.html", &ctx)
+}
+
+#[derive(Deserialize)]
+struct UserForm {
+    name: String,
+    email: String,
+    #[serde(default)]
+    password: String,
+}
+
+async fn user_update(
+    State(state): State<Arc<AppState>>,
+    admin: AdminUser,
+    Path(id): Path<String>,
+    jar: CookieJar,
+    axum::Form(form): axum::Form<UserForm>,
+) -> Response {
+    let Ok(id) = Uuid::parse_str(&id) else {
+        return Redirect::to("/admin/users").into_response();
+    };
+    let name = form.name.trim();
+    let email = form.email.trim();
+
+    let error = if name.is_empty() || !email.contains('@') {
+        Some("Enter a name and a valid email.".to_string())
+    } else if !form.password.is_empty() && form.password.chars().count() < auth::MIN_PASSWORD_LEN {
+        Some(format!(
+            "New password must be at least {} characters, or leave it blank to keep the current one.",
+            auth::MIN_PASSWORD_LEN
+        ))
+    } else {
+        let new_hash = (!form.password.is_empty()).then(|| auth::hash_password(&form.password));
+        let own_session = jar.get(auth::SESSION_COOKIE).and_then(|c| Uuid::parse_str(c.value()).ok());
+        match db::update_user(&state.db, id, name, email, new_hash.as_deref(), own_session).await {
+            Ok(()) => {
+                let to = if new_hash.is_some() { "/admin/users?saved=password" } else { "/admin/users?saved=1" };
+                return Redirect::to(to).into_response();
+            }
+            Err(message) => Some(message),
+        }
+    };
+
+    // Re-open the panel with what was typed (never the password) and the error.
+    let mut ctx = users_list_ctx(&state, &admin, "").await;
+    insert_user_drawer(&mut ctx, id, name, email, error.as_deref());
     render(&state, "admin/users.html", &ctx)
 }
 

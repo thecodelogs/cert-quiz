@@ -1,0 +1,50 @@
+{% if user_drawer_open %}
+    <div class="fixed inset-0 z-40">
+      <a href="/admin/users" aria-label="Close editor" class="absolute inset-0 border-0 bg-[rgba(36,31,26,0.28)] cursor-pointer block"></a>
+
+      <div class="absolute top-0 right-0 bottom-0 w-[480px] bg-paper border-l border-line shadow-[-18px_0_46px_rgba(36,31,26,0.16)] flex flex-col">
+        <form method="post" action="/admin/users/{{ edit_id }}" class="flex flex-col flex-1 min-h-0">
+        <div class="bg-band border-b border-edge px-6 py-4 flex items-center justify-between gap-4">
+          <div>
+            <div class="font-serif text-[21px] tracking-[-0.02em]">Edit user</div>
+            <div class="label text-muted2 mt-1">{{ edit_email }}</div>
+          </div>
+          <a href="/admin/users" class="label !tracking-[0.14em] text-muted hover:text-rustd no-underline">Close</a>
+        </div>
+
+        <div class="flex-1 overflow-y-auto p-6">
+          <div class="flex flex-col gap-[22px]">
+            {% if edit_error %}
+              <div role="alert" class="text-[13px] text-rustd border border-rustd bg-paper px-3 py-2">{{ edit_error }}</div>
+            {% endif %}
+
+            <label class="flex flex-col gap-2">
+              <span class="label text-muted2">Name</span>
+              <input name="name" value="{{ edit_name }}" required autocomplete="off" class="border border-line bg-field px-3 py-2.5 text-[14px]" />
+            </label>
+
+            <label class="flex flex-col gap-2">
+              <span class="label text-muted2">Email</span>
+              <input type="email" name="email" value="{{ edit_email }}" required autocomplete="off" class="border border-line bg-field px-3 py-2.5 text-[14px]" />
+              <span class="text-[12px] text-muted">This is what they log in with.</span>
+            </label>
+
+            <div class="border-t border-rule pt-[22px]">
+              <label class="flex flex-col gap-2">
+                <span class="label text-muted2">New password</span>
+                {# autocomplete=new-password stops the browser filling in the admin's own saved password. #}
+                <input type="password" name="password" minlength="8" autocomplete="new-password" placeholder="Leave blank to keep the current password" class="border border-line bg-field px-3 py-2.5 text-[14px]" />
+                <span class="text-[12px] text-muted">At least 8 characters. Setting one logs this user out of any other devices.</span>
+              </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t border-edge bg-band px-6 py-3.5 flex items-center justify-end gap-2">
+          <a href="/admin/users" class="border border-line bg-paper px-[18px] py-[9px] text-[13px] rounded-full no-underline text-ink hover:border-ink">Cancel</a>
+          <button type="submit" class="border border-ink bg-ink text-paper px-5 py-[9px] text-[13px] font-medium rounded-full cursor-pointer hover:bg-[#3d342b]">Save</button>
+        </div>
+        </form>
+      </div>
+    </div>
+{% endif %}

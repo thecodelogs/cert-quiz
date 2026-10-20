@@ -1138,6 +1138,7 @@ pub async fn recent_imports(pool: &PgPool, limit: i64) -> Vec<ImportRow> {
 
 #[derive(serde::Serialize)]
 pub struct AdminUserRow {
+    pub id: String,
     pub name: String,
     pub email: String,
     pub role: String,
@@ -1151,7 +1152,7 @@ pub struct AdminUserRow {
 /// score, and last-active readout, for the admin users page.
 pub async fn admin_users(pool: &PgPool) -> Vec<AdminUserRow> {
     let rows = sqlx::query(
-        "select u.name, u.email, u.status,
+        "select u.id, u.name, u.email::text as email, u.status,
                 (select r.name from user_roles ur join roles r on r.id = ur.role_id
                  where ur.user_id = u.id
                  order by case r.name when 'admin' then 0 when 'editor' then 1 else 2 end
@@ -1170,6 +1171,7 @@ pub async fn admin_users(pool: &PgPool) -> Vec<AdminUserRow> {
         .map(|row| {
             let days_ago: Option<i64> = row.try_get("days_ago").ok();
             AdminUserRow {
+                id: row.try_get::<Uuid, _>("id").expect("id").to_string(),
                 name: row.try_get("name").expect("name"),
                 email: row.try_get("email").expect("email"),
                 role: row.try_get::<Option<String>, _>("role").ok().flatten().unwrap_or_else(|| "Learner".to_string()),
@@ -1190,6 +1192,63 @@ pub async fn toggle_user_status(pool: &PgPool, email: &str) {
     .execute(pool)
     .await
     .expect("failed to toggle user status");
+}
+
+/// (name, email) for the admin's edit-user panel.
+pub async fn user_for_edit(pool: &PgPool, id: Uuid) -> Option<(String, String)> {
+    let row = sqlx::query("select name, email::text as email from users where id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .expect("failed to load user")?;
+    Some((row.try_get("name").expect("name"), row.try_get("email").expect("email")))
+}
+
+/// Saves an admin's edits to a user. With a new password, the user's other
+/// sessions are ended so an old login can't outlive the change; `keep_session`
+/// is the editing admin's own session, kept when they change their own password.
+/// `Err` carries a message fit to show in the form.
+pub async fn update_user(
+    pool: &PgPool,
+    id: Uuid,
+    name: &str,
+    email: &str,
+    password_hash: Option<&str>,
+    keep_session: Option<Uuid>,
+) -> Result<(), String> {
+    let mut tx = pool.begin().await.expect("failed to begin transaction");
+
+    let updated = sqlx::query(
+        "update users
+         set name = $2, email = $3, password_hash = coalesce($4, password_hash), updated_at = now()
+         where id = $1",
+    )
+    .bind(id)
+    .bind(name)
+    .bind(email)
+    .bind(password_hash)
+    .execute(&mut *tx)
+    .await;
+    match updated {
+        Ok(r) if r.rows_affected() == 0 => return Err("That user no longer exists.".to_string()),
+        Ok(_) => {}
+        Err(sqlx::Error::Database(e)) if e.is_unique_violation() => {
+            return Err("Another account already uses that email.".to_string());
+        }
+        Err(e) => panic!("failed to update user: {e}"),
+    }
+
+    if password_hash.is_some() {
+        sqlx::query("delete from sessions where user_id = $1 and id is distinct from $2")
+            .bind(id)
+            .bind(keep_session)
+            .execute(&mut *tx)
+            .await
+            .expect("failed to end user sessions");
+    }
+
+    tx.commit().await.expect("failed to commit user update");
+    Ok(())
 }
 
 pub async fn touch_last_active(pool: &PgPool, user_id: Uuid) {

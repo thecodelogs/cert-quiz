@@ -163,8 +163,6 @@ async fn home(
 
 /* ---------- account ---------- */
 
-const MIN_PASSWORD_LEN: usize = 8;
-
 #[derive(Deserialize)]
 struct LoginQuery {
     next: Option<String>,
@@ -255,8 +253,8 @@ async fn signup_submit(State(state): State<Arc<AppState>>, Form(form): Form<Sign
     if name.is_empty() || !email.contains('@') {
         return fail("Enter your name and a valid email.");
     }
-    if form.password.chars().count() < MIN_PASSWORD_LEN {
-        return fail(&format!("Password must be at least {MIN_PASSWORD_LEN} characters."));
+    if form.password.chars().count() < auth::MIN_PASSWORD_LEN {
+        return fail(&format!("Password must be at least {} characters.", auth::MIN_PASSWORD_LEN));
     }
 
     let user_id = match db::create_user(&state.db, name, email, &auth::hash_password(&form.password)).await {

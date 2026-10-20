@@ -97,6 +97,7 @@ cargo run                               # http://localhost:3000
 | GET/POST | `/admin/flagged` | learner reports. Actions: `keep`, `retire` |
 | GET/POST | `/admin/import` | bulk paste of JSON or CSV into a track, can save as draft |
 | GET/POST | `/admin/users` | list and search users, suspend or reactivate (`toggle=<email>`) |
+| GET/POST | `/admin/users/:id` | edit panel: name, email and an optional new password (8+ characters, blank keeps the current one). A new password ends the user's other sessions, but keeps the editing admin's own |
 
 ---
 
