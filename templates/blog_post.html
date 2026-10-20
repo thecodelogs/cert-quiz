@@ -5,21 +5,61 @@
 <style>
   .post-body { font-family: Newsreader, Georgia, serif; font-size: 20px; line-height: 1.7; color: #4e463d; }
   .post-body > * + * { margin-top: 1.1em; }
-  .post-body h1, .post-body h2, .post-body h3 { color: #241f1a; font-weight: 400; letter-spacing: -0.02em; line-height: 1.2; margin-top: 1.8em; }
-  .post-body h1 { font-size: 36px; } .post-body h2 { font-size: 30px; } .post-body h3 { font-size: 24px; }
-  .post-body a { color: #9a4620; text-decoration: underline; text-underline-offset: 3px; }
+  .post-body strong { color: #241f1a; font-weight: 600; }
+
+  /* headings: each h2 opens a section; scroll-margin keeps anchor jumps clear of the top edge */
+  .post-body h1, .post-body h2, .post-body h3, .post-body h4 { color: #241f1a; font-weight: 400; letter-spacing: -0.02em; line-height: 1.2; scroll-margin-top: 24px; }
+  .post-body h1 { font-size: 36px; margin-top: 1.8em; }
+  .post-body h2 { font-size: 31px; margin-top: 2.2em; padding-top: 1.3em; border-top: 1px solid #d9d0c0; }
+  .post-body h3 { font-size: 23px; margin-top: 1.8em; }
+  .post-body h4 { font-size: 19px; margin-top: 1.5em; font-weight: 500; }
+  .post-body h2 + *, .post-body h3 + *, .post-body h4 + * { margin-top: 0.7em; }
+  .post-body > :first-child { margin-top: 0; border-top: 0; padding-top: 0; }
+  .post-body hr { border: 0; margin: 0; height: 0; }
+  .post-body hr + h2 { margin-top: 2em; }
+
+  .post-body a { color: #9a4620; text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
   .post-body a:hover { color: #241f1a; }
-  .post-body ul, .post-body ol { padding-left: 1.4em; } .post-body ul { list-style: disc; } .post-body ol { list-style: decimal; }
-  .post-body li + li { margin-top: 0.35em; }
-  .post-body blockquote { border-left: 3px solid #b4531f; padding-left: 1.1em; font-style: italic; color: #6f6659; }
-  .post-body code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82em; background: #efe6d5; padding: 0.12em 0.35em; border-radius: 4px; }
-  .post-body pre { background: #241f1a; color: #f7f2e8; padding: 18px 20px; border-radius: 10px; overflow-x: auto; font-size: 15px; line-height: 1.55; }
+
+  /* lists, including the table of contents */
+  .post-body ul, .post-body ol { padding-left: 1.4em; }
+  .post-body ul { list-style: disc; } .post-body ol { list-style: decimal; }
+  .post-body li::marker { color: #b4531f; }
+  .post-body li + li { margin-top: 0.4em; }
+  .post-body li > ul, .post-body li > ol { margin-top: 0.4em; }
+
+  /* task lists ("- [ ]"): a styled box instead of a bullet */
+  .post-body li:has(> input[type=checkbox]) { list-style: none; position: relative; margin-left: -1.4em; padding-left: 1.9em; }
+  .post-body li > input[type=checkbox] { appearance: none; position: absolute; left: 0; top: 0.42em; margin: 0; width: 17px; height: 17px; border: 1.5px solid #c8bda9; border-radius: 4px; background: #fdfaf3; }
+  .post-body li > input[type=checkbox]:checked { background: #241f1a; border-color: #241f1a; }
+
+  /* notes ("> **Note:** …") as callouts */
+  .post-body blockquote { background: #f1e7d3; border-left: 3px solid #b4531f; border-radius: 0 10px 10px 0; padding: 14px 20px; font-size: 18px; line-height: 1.6; color: #4e463d; }
+  .post-body blockquote > * + * { margin-top: 0.6em; }
+
+  /* code */
+  .post-body code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.8em; background: #efe6d5; color: #241f1a; padding: 0.12em 0.38em; border-radius: 4px; }
+  .post-body pre { position: relative; background: #241f1a; color: #efe6d5; padding: 38px 20px 18px; border-radius: 10px; overflow-x: auto; font-size: 14.5px; line-height: 1.6; }
   .post-body pre code { background: transparent; padding: 0; color: inherit; font-size: inherit; }
-  .post-body hr { border: 0; border-top: 1px solid #d9d0c0; }
+  .post-body pre[data-lang]::before { content: attr(data-lang); position: absolute; top: 10px; left: 20px; font: 600 10.5px/1 "Libre Franklin", system-ui, sans-serif; letter-spacing: 0.14em; text-transform: uppercase; color: #a89e91; }
+  .post-body .copy-code { position: absolute; top: 7px; right: 10px; font: 500 11px/1 "Libre Franklin", system-ui, sans-serif; letter-spacing: 0.08em; text-transform: uppercase; color: #c8bda9; background: transparent; border: 1px solid #4e463d; border-radius: 999px; padding: 6px 10px; cursor: pointer; }
+  .post-body .copy-code:hover { color: #f7f2e8; border-color: #a89e91; }
+  /* highlight.js tokens, in the site's palette */
+  .post-body .hljs-comment, .post-body .hljs-quote { color: #8a8073; font-style: italic; }
+  .post-body .hljs-keyword, .post-body .hljs-selector-tag, .post-body .hljs-built_in, .post-body .hljs-section { color: #e8a26f; }
+  .post-body .hljs-string, .post-body .hljs-attr + .hljs-string { color: #c9d39a; }
+  .post-body .hljs-attr, .post-body .hljs-attribute, .post-body .hljs-variable, .post-body .hljs-template-variable { color: #f0c987; }
+  .post-body .hljs-number, .post-body .hljs-literal, .post-body .hljs-symbol { color: #d99a8b; }
+  .post-body .hljs-meta, .post-body .hljs-title, .post-body .hljs-params { color: #b8c9d9; }
+
+  /* tables scroll sideways on narrow screens instead of breaking the page */
+  .post-body table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; font-family: "Libre Franklin", system-ui, sans-serif; font-size: 15px; line-height: 1.5; }
+  .post-body thead th { background: #f1e7d3; color: #241f1a; font-weight: 600; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; }
+  .post-body th, .post-body td { border-bottom: 1px solid #e3dacb; padding: 10px 14px; text-align: left; vertical-align: top; }
+  .post-body tbody tr:nth-child(even) td { background: #faf6ee; }
+  .post-body td code { font-size: 0.85em; white-space: nowrap; }
+
   .post-body img { max-width: 100%; border-radius: 8px; }
-  .post-body table { border-collapse: collapse; font-size: 17px; width: 100%; }
-  .post-body th, .post-body td { border-bottom: 1px solid #e3dacb; padding: 8px 10px; text-align: left; }
-  .post-body th { color: #241f1a; font-weight: 500; }
 </style>
 
 <article class="max-w-[760px] mx-auto px-6 md:px-0 pt-[64px] pb-24">
@@ -40,4 +80,29 @@
   </div>
 </article>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  /* code blocks: language label, syntax colours, copy button */
+  (function () {
+    document.querySelectorAll('.post-body pre > code').forEach(function (code) {
+      var pre = code.parentElement;
+      var lang = (code.className.match(/language-([\w-]+)/) || [])[1];
+      if (lang) pre.dataset.lang = lang === 'ini' ? 'config' : lang;
+      if (window.hljs && lang && hljs.getLanguage(lang)) hljs.highlightElement(code);
+
+      if (!navigator.clipboard) return;
+      var btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'copy-code';
+      btn.textContent = 'Copy';
+      btn.addEventListener('click', function () {
+        navigator.clipboard.writeText(code.innerText).then(function () {
+          btn.textContent = 'Copied';
+          setTimeout(function () { btn.textContent = 'Copy'; }, 1500);
+        });
+      });
+      pre.appendChild(btn);
+    });
+  })();
+</script>
 {% include "partials/foot.html" %}
