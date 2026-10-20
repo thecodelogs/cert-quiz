@@ -18,27 +18,27 @@
     <div class="px-9 pb-14">
       <div class="overflow-hidden border-b border-rule">
         <div class="grid grid-cols-5 w-[calc(100%+1px)]">
-          <div class="pt-6 pr-6 pb-[22px] border-r border-hair">
+          <div class="pt-6 px-4 pb-[22px] border-r border-hair text-center">
             <div class="font-serif text-[40px] leading-none tracking-[-0.03em] text-ink">{{ stats.live_questions }}</div>
             <div class="label text-muted2 mt-[9px]">Live questions</div>
             <div class="text-[12px] text-muted mt-1">{{ stats.published_tracks }} of {{ stats.total_tracks }} tracks published</div>
           </div>
-          <div class="pt-6 pr-6 pb-[22px] border-r border-hair">
+          <div class="pt-6 px-4 pb-[22px] border-r border-hair text-center">
             <div class="font-serif text-[40px] leading-none tracking-[-0.03em] text-ink">{{ stats.drafts }}</div>
             <div class="label text-muted2 mt-[9px]">Drafts</div>
             <div class="text-[12px] text-muted mt-1">Not visible to learners</div>
           </div>
-          <div class="pt-6 pr-6 pb-[22px] border-r border-hair">
+          <div class="pt-6 px-4 pb-[22px] border-r border-hair text-center">
             <div class="font-serif text-[40px] leading-none tracking-[-0.03em] text-rustd">{{ stats.flagged }}</div>
             <div class="label text-muted2 mt-[9px]">Flagged</div>
             <div class="text-[12px] text-muted mt-1">Reported by learners</div>
           </div>
-          <div class="pt-6 pr-6 pb-[22px] border-r border-hair">
+          <div class="pt-6 px-4 pb-[22px] border-r border-hair text-center">
             <div class="font-serif text-[40px] leading-none tracking-[-0.03em] text-ink">{{ stats.attempts_30d }}</div>
             <div class="label text-muted2 mt-[9px]">Attempts · 30d</div>
             <div class="text-[12px] text-muted mt-1">Finished attempts in the last 30 days</div>
           </div>
-          <div class="pt-6 pr-6 pb-[22px] border-r border-hair">
+          <div class="pt-6 px-4 pb-[22px] border-r border-hair text-center">
             <div class="font-serif text-[40px] leading-none tracking-[-0.03em] {% if stats.mean_score_30d < stats.pass_mark %}text-rustd{% else %}text-ink{% endif %}">{{ stats.mean_score_30d }}%</div>
             <div class="label text-muted2 mt-[9px]">Mean score</div>
             <div class="text-[12px] text-muted mt-1">Pass mark is {{ stats.pass_mark }}%</div>
