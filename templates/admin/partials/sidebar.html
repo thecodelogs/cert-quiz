@@ -21,6 +21,10 @@
         <span>Import</span>
         <span class="font-sans text-[11.5px] tracking-[0.06em] text-faint"></span>
       </a>
+      <a href="/admin/blog" class="flex items-baseline justify-between gap-3 no-underline border-l-[3px] pl-[23px] pr-6 py-3.5 font-serif text-[19px] tracking-[-0.01em] {% if active == "blog" %}border-ink bg-bandhi text-ink font-medium{% else %}border-transparent text-ink2 hover:bg-bandhover{% endif %}">
+        <span>Blog</span>
+        <span class="font-sans text-[11.5px] tracking-[0.06em] text-faint">{{ nav_posts }}</span>
+      </a>
       <a href="/admin/users" class="flex items-baseline justify-between gap-3 no-underline border-l-[3px] pl-[23px] pr-6 py-3.5 font-serif text-[19px] tracking-[-0.01em] {% if active == "users" %}border-ink bg-bandhi text-ink font-medium{% else %}border-transparent text-ink2 hover:bg-bandhover{% endif %}">
         <span>Users</span>
         <span class="font-sans text-[11.5px] tracking-[0.06em] text-faint">{{ nav_users }}</span>

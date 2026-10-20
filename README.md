@@ -49,9 +49,10 @@ Hash a new password: `cargo run --example hash_password -- <password>`.
 | --- | --- | --- |
 | GET | `/?provider=All\|AWS\|GCP\|K8s` | track list |
 | GET / POST | `/login`, `/signup`, `/logout` | learner accounts (log in and sign up on one page) |
+| GET | `/blog`, `/blog/:slug` | blog list (public) and posts (login required) |
 | GET / POST | `/quiz/:slug` | one question per page, then results. Requires login; guests go to `/login` |
 | GET | `/admin` | dashboard (needs the `admin` role) |
-| | `/admin/questions`, `/flagged`, `/import`, `/users` | question bank, learner reports, bulk import, user management |
+| | `/admin/questions`, `/flagged`, `/import`, `/blog`, `/users` | question bank, learner reports, bulk import, blog posts, user management |
 
 ## Deploy
 

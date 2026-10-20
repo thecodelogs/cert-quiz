@@ -1305,14 +1305,201 @@ pub async fn create_user(pool: &PgPool, name: &str, email: &str, password_hash: 
     Ok(user_id)
 }
 
+/* ================= blog ================= */
+
+/// A published post as it appears on the public /blog list.
+#[derive(serde::Serialize)]
+pub struct PostListItem {
+    pub slug: String,
+    pub title: String,
+    pub summary: String,
+    pub date: String,
+    pub minutes: i64,
+}
+
+/// "October 20, 2026"
+const POST_DATE_SQL: &str = "to_char(p.published_at, 'FMMonth FMDD, YYYY')";
+/// Rough reading time at ~200 words a minute, never less than 1.
+const READING_MINUTES_SQL: &str =
+    "greatest(1, ceil(coalesce(array_length(regexp_split_to_array(trim(p.body), '\\s+'), 1), 0) / 200.0))::bigint";
+
+pub async fn published_posts(pool: &PgPool) -> Vec<PostListItem> {
+    let sql = format!(
+        "select p.slug, p.title, p.summary, {POST_DATE_SQL} as date, {READING_MINUTES_SQL} as minutes
+         from posts p
+         where p.status = 'published'
+         order by p.published_at desc, p.id desc"
+    );
+    sqlx::query(sqlx::AssertSqlSafe(sql))
+        .fetch_all(pool)
+        .await
+        .expect("failed to load posts")
+        .into_iter()
+        .map(|row| PostListItem {
+            slug: row.try_get("slug").expect("slug"),
+            title: row.try_get("title").expect("title"),
+            summary: row.try_get("summary").expect("summary"),
+            date: row.try_get("date").expect("date"),
+            minutes: row.try_get("minutes").expect("minutes"),
+        })
+        .collect()
+}
+
+pub struct Post {
+    pub title: String,
+    pub summary: String,
+    /// Markdown source.
+    pub body: String,
+    pub date: String,
+    pub minutes: i64,
+    pub author: Option<String>,
+}
+
+/// One published post by slug; drafts are treated as not found.
+pub async fn published_post(pool: &PgPool, slug: &str) -> Option<Post> {
+    let sql = format!(
+        "select p.title, p.summary, p.body, {POST_DATE_SQL} as date, {READING_MINUTES_SQL} as minutes, u.name as author
+         from posts p
+         left join users u on u.id = p.author_id
+         where p.slug = $1 and p.status = 'published'"
+    );
+    let row = sqlx::query(sqlx::AssertSqlSafe(sql))
+        .bind(slug)
+        .fetch_optional(pool)
+        .await
+        .expect("failed to load post")?;
+    Some(Post {
+        title: row.try_get("title").expect("title"),
+        summary: row.try_get("summary").expect("summary"),
+        body: row.try_get("body").expect("body"),
+        date: row.try_get("date").expect("date"),
+        minutes: row.try_get("minutes").expect("minutes"),
+        author: row.try_get("author").expect("author"),
+    })
+}
+
+/* ================= admin: blog ================= */
+
+#[derive(serde::Serialize)]
+pub struct AdminPostRow {
+    pub id: i64,
+    pub slug: String,
+    pub title: String,
+    pub status: String,
+    pub published: String,
+    pub edited: String,
+}
+
+pub async fn admin_posts(pool: &PgPool) -> Vec<AdminPostRow> {
+    let sql = format!(
+        "select p.id, p.slug, p.title, p.status, {POST_DATE_SQL} as published,
+                extract(day from now() - p.updated_at)::bigint as days_ago
+         from posts p
+         order by p.updated_at desc, p.id desc"
+    );
+    sqlx::query(sqlx::AssertSqlSafe(sql))
+        .fetch_all(pool)
+        .await
+        .expect("failed to load admin posts")
+        .into_iter()
+        .map(|row| AdminPostRow {
+            id: row.try_get("id").expect("id"),
+            slug: row.try_get("slug").expect("slug"),
+            title: row.try_get("title").expect("title"),
+            status: row.try_get("status").expect("status"),
+            published: row.try_get::<Option<String>, _>("published").expect("published").unwrap_or_else(|| "—".to_string()),
+            edited: relative_days(row.try_get("days_ago").expect("days_ago")),
+        })
+        .collect()
+}
+
+/// What the post editor shows and submits.
+#[derive(Default)]
+pub struct PostInput {
+    pub title: String,
+    pub slug: String,
+    pub summary: String,
+    pub body: String,
+    pub status: String,
+}
+
+pub async fn post_for_edit(pool: &PgPool, id: i64) -> Option<PostInput> {
+    let row = sqlx::query("select title, slug, summary, body, status from posts where id = $1")
+        .bind(id)
+        .fetch_optional(pool)
+        .await
+        .expect("failed to load post")?;
+    Some(PostInput {
+        title: row.try_get("title").expect("title"),
+        slug: row.try_get("slug").expect("slug"),
+        summary: row.try_get("summary").expect("summary"),
+        body: row.try_get("body").expect("body"),
+        status: row.try_get("status").expect("status"),
+    })
+}
+
+/// Creates (`id` None) or updates a post and returns its id. `published_at`
+/// is stamped the first time the post is published and kept afterwards.
+/// `Err` carries a message fit to show in the editor.
+pub async fn save_post(pool: &PgPool, id: Option<i64>, input: &PostInput, author: Uuid) -> Result<i64, String> {
+    let result = match id {
+        None => {
+            sqlx::query(
+                "insert into posts (slug, title, summary, body, status, published_at, author_id)
+                 values ($1, $2, $3, $4, $5, case when $5 = 'published' then now() end, $6)
+                 returning id",
+            )
+            .bind(&input.slug)
+            .bind(&input.title)
+            .bind(&input.summary)
+            .bind(&input.body)
+            .bind(&input.status)
+            .bind(author)
+            .fetch_optional(pool)
+            .await
+        }
+        Some(id) => {
+            sqlx::query(
+                "update posts
+                 set slug = $2, title = $3, summary = $4, body = $5, status = $6,
+                     published_at = case when $6 = 'published' then coalesce(published_at, now()) else published_at end,
+                     updated_at = now()
+                 where id = $1
+                 returning id",
+            )
+            .bind(id)
+            .bind(&input.slug)
+            .bind(&input.title)
+            .bind(&input.summary)
+            .bind(&input.body)
+            .bind(&input.status)
+            .fetch_optional(pool)
+            .await
+        }
+    };
+    match result {
+        Ok(Some(row)) => Ok(row.try_get("id").expect("id")),
+        Ok(None) => Err("That post no longer exists.".to_string()),
+        Err(sqlx::Error::Database(e)) if e.is_unique_violation() => {
+            Err(format!("Another post already uses the URL /blog/{}. Choose a different slug.", input.slug))
+        }
+        Err(e) => panic!("failed to save post: {e}"),
+    }
+}
+
+pub async fn delete_post(pool: &PgPool, id: i64) {
+    sqlx::query("delete from posts where id = $1").bind(id).execute(pool).await.expect("failed to delete post");
+}
+
 /* ================= admin: sidebar ================= */
 
 /// (live questions, open flags, users) — the sidebar's nav badges.
-pub async fn nav_counts(pool: &PgPool) -> (i64, i64, i64) {
+pub async fn nav_counts(pool: &PgPool) -> (i64, i64, i64, i64) {
     let row = sqlx::query(
         "select (select count(*) from questions where status = 'live') as questions,
                 (select count(distinct question_id) from question_flags where status = 'open') as flagged,
-                (select count(*) from users) as users",
+                (select count(*) from users) as users,
+                (select count(*) from posts) as posts",
     )
     .fetch_one(pool)
     .await
@@ -1322,6 +1509,7 @@ pub async fn nav_counts(pool: &PgPool) -> (i64, i64, i64) {
         row.try_get("questions").expect("questions"),
         row.try_get("flagged").expect("flagged"),
         row.try_get("users").expect("users"),
+        row.try_get("posts").expect("posts"),
     )
 }
 

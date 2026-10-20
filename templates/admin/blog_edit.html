@@ -1,0 +1,87 @@
+{% if post_id %}{% set title = "Edit post — Drill admin" %}{% else %}{% set title = "New post — Drill admin" %}{% endif %}{% include "admin/partials/head.html" %}
+<div class="grid grid-cols-[252px_minmax(0,1fr)] min-w-[1260px]">
+{% include "admin/partials/sidebar.html" %}
+  <main>
+    <form method="post" action="{% if post_id %}/admin/blog/{{ post_id }}{% else %}/admin/blog/new{% endif %}" class="group/post">
+    <div class="bg-band border-b border-edge">
+      <div class="px-9 py-[18px] flex flex-wrap items-center justify-between gap-5">
+        <div class="flex items-baseline gap-4">
+          <a href="/admin/blog" class="label text-muted no-underline hover:text-ink">← Blog</a>
+          <span class="font-serif text-[25px] tracking-[-0.02em]">{% if post_id %}Edit post{% else %}New post{% endif %}</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          {% if post_id and post_status == "published" and post_slug %}
+          <a href="/blog/{{ post_slug }}" target="_blank" rel="noopener" class="border border-line bg-paper px-4 py-2 text-[13px] rounded-full no-underline text-ink hover:border-ink">View post ↗</a>
+          {% endif %}
+          <a href="/admin/blog" class="border border-line bg-paper px-4 py-2 text-[13px] rounded-full no-underline text-ink hover:border-ink">Cancel</a>
+          <button type="submit" class="border border-ink bg-ink text-paper px-[18px] py-2 text-[13px] font-medium rounded-full cursor-pointer hover:bg-[#3d342b] hover:border-[#3d342b]">Save</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-9 py-8 grid grid-cols-[minmax(0,1fr)_280px] gap-10 items-start">
+      <div class="flex flex-col gap-[22px] min-w-0">
+        {% if error %}
+          <div role="alert" class="text-[13px] text-rustd border border-rustd bg-paper px-3 py-2">{{ error }}</div>
+        {% endif %}
+
+        <label class="flex flex-col gap-2">
+          <span class="label text-muted2">Title</span>
+          <input name="title" value="{{ post_title }}" required class="border border-line bg-field px-3.5 py-3 font-serif text-[24px] tracking-[-0.01em]" />
+        </label>
+
+        <label class="flex flex-col gap-2">
+          <span class="label text-muted2">Summary</span>
+          <textarea name="summary" rows="2" class="border border-line bg-field px-3.5 py-3 font-serif text-[17px] leading-[1.45] resize-y">{{ post_summary }}</textarea>
+          <span class="text-[12px] text-muted">Shown on the blog list (to everyone) and under the title.</span>
+        </label>
+
+        <label class="flex flex-col gap-2">
+          <span class="flex items-baseline justify-between gap-3">
+            <span class="label text-muted2">Body</span>
+            <span class="text-[12px] text-muted">Markdown: <code class="text-ink2">## Heading</code>, <code class="text-ink2">**bold**</code>, <code class="text-ink2">[link](https://…)</code>, <code class="text-ink2">- list</code>, <code class="text-ink2">```code```</code></span>
+          </span>
+          <textarea name="body" rows="24" class="border border-line bg-field px-3.5 py-3 font-mono text-[14px] leading-[1.6] resize-y">{{ post_body }}</textarea>
+          <span class="text-[12px] text-muted">Only logged-in users can read the body. Raw HTML is shown as text, not run.</span>
+        </label>
+      </div>
+
+      <aside class="flex flex-col gap-[22px] border border-edge bg-band p-5">
+        <div>
+          <div class="label text-muted2 mb-2">Status</div>
+          {# Styled from the radio's live state, so a click shows immediately. #}
+          <div class="flex border border-line w-fit">
+            <label class="border-0 border-r border-edge px-5 py-2 text-[11.5px] tracking-[0.1em] uppercase cursor-pointer bg-transparent text-muted hover:text-ink has-[:checked]:bg-ink has-[:checked]:text-paper has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-rust">
+              <input type="radio" id="post-draft" name="status" value="draft" {% if post_status != "published" %}checked{% endif %} class="sr-only" />Draft
+            </label>
+            <label class="border-0 px-5 py-2 text-[11.5px] tracking-[0.1em] uppercase cursor-pointer bg-transparent text-muted hover:text-ink has-[:checked]:bg-ink has-[:checked]:text-paper has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-rust">
+              <input type="radio" name="status" value="published" {% if post_status == "published" %}checked{% endif %} class="sr-only" />Published
+            </label>
+          </div>
+          <div class="text-[12px] text-muted mt-2">
+            <span class="hidden group-has-[#post-draft:checked]/post:inline">Draft: only admins can see it.</span>
+            <span class="group-has-[#post-draft:checked]/post:hidden">Published: listed on /blog.</span>
+          </div>
+        </div>
+
+        <label class="flex flex-col gap-2">
+          <span class="label text-muted2">URL slug</span>
+          <span class="flex items-center border border-line bg-field">
+            <span class="pl-3 text-[13px] text-muted">/blog/</span>
+            <input name="slug" value="{{ post_slug }}" placeholder="made from the title" class="flex-1 min-w-0 bg-transparent border-0 px-1 py-2 text-[13px] outline-none" />
+          </span>
+          <span class="text-[12px] text-muted">Leave blank to make it from the title. Changing it breaks old links.</span>
+        </label>
+      </aside>
+    </div>
+    </form>
+
+    {% if post_id %}
+    <form method="post" action="/admin/blog/{{ post_id }}/delete" class="px-9 pb-[72px]"
+          onsubmit="return confirm('Delete this post? This cannot be undone.');">
+      <button type="submit" class="border border-rustd bg-transparent text-rustd px-4 py-2 text-[13px] rounded-full cursor-pointer hover:bg-rustd hover:text-paper">Delete post</button>
+    </form>
+    {% endif %}
+  </main>
+</div>
+{% include "admin/partials/foot.html" %}

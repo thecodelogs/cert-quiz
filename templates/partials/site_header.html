@@ -1,0 +1,23 @@
+{# Learner-facing header. Set `nav` ("home" / "blog") before including to mark the current section. #}
+<div class="bg-band border-b border-edge">
+  <div class="max-w-[1180px] mx-auto px-6 md:px-14 py-6 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-3">
+    <div class="flex items-baseline gap-8">
+      <a href="/" class="font-serif text-[24px] font-medium tracking-[-0.01em] no-underline text-ink">Drill<span class="text-rust">.</span></a>
+      <nav class="flex items-baseline gap-6">
+        <a href="/" class="label !text-[13px] no-underline {% if nav == "home" %}text-ink font-medium{% else %}text-muted hover:text-ink{% endif %}">Tracks</a>
+        <a href="/blog" class="label !text-[13px] no-underline {% if nav == "blog" %}text-ink font-medium{% else %}text-muted hover:text-ink{% endif %}">Blog</a>
+      </nav>
+    </div>
+    <div class="flex items-baseline gap-7">
+      <div class="label text-muted2 hidden md:block">{{ total_questions }} questions · {{ tracks }} tracks</div>
+      {% if user_name %}
+        <span class="label !text-[13px] text-ink">{{ user_name }}</span>
+        <form method="post" action="/logout" class="m-0">
+          <button type="submit" class="label !text-[13px] font-medium text-ink border border-line rounded-full px-[18px] py-[9px] bg-transparent cursor-pointer hover:border-ink">Log out</button>
+        </form>
+      {% else %}
+        <a href="/login" class="label !text-[13px] font-medium text-ink no-underline border border-line rounded-full px-[18px] py-[9px] hover:border-ink">Log in</a>
+      {% endif %}
+    </div>
+  </div>
+</div>

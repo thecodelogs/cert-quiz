@@ -2,22 +2,7 @@
 {# Guests go to the login page first, then on to the quiz they picked. #}
 {% if user_name %}{% set quiz_prefix = "/quiz/" %}{% else %}{% set quiz_prefix = "/login?next=/quiz/" %}{% endif %}
 
-<div class="bg-band border-b border-edge">
-  <div class="max-w-[1180px] mx-auto px-14 py-6 flex items-baseline justify-between gap-6">
-    <a href="/" class="font-serif text-[24px] font-medium tracking-[-0.01em] no-underline text-ink">Drill<span class="text-rust">.</span></a>
-    <div class="flex items-baseline gap-7">
-      <div class="label text-muted2">{{ total_questions }} questions · {{ tracks }} tracks</div>
-      {% if user_name %}
-        <span class="label !text-[13px] text-ink">{{ user_name }}</span>
-        <form method="post" action="/logout" class="m-0">
-          <button type="submit" class="label !text-[13px] font-medium text-ink border border-line rounded-full px-[18px] py-[9px] bg-transparent cursor-pointer hover:border-ink">Log out</button>
-        </form>
-      {% else %}
-        <a href="/login" class="label !text-[13px] font-medium text-ink no-underline border border-line rounded-full px-[18px] py-[9px] hover:border-ink">Log in</a>
-      {% endif %}
-    </div>
-  </div>
-</div>
+{% set nav = "home" %}{% include "partials/site_header.html" %}
 
 <div class="max-w-[1180px] mx-auto px-14">
   <div class="pt-[84px] pb-[72px] border-b border-rule">

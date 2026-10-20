@@ -1,0 +1,48 @@
+{% set title = "Blog — Drill admin" %}{% include "admin/partials/head.html" %}
+<div class="grid grid-cols-[252px_minmax(0,1fr)] min-w-[1260px]">
+{% include "admin/partials/sidebar.html" %}
+  <main>
+    <div class="bg-band border-b border-edge">
+      <div class="px-9 py-[18px] flex flex-wrap items-center justify-between gap-5">
+        <div class="flex items-baseline gap-4">
+          <span class="font-serif text-[25px] tracking-[-0.02em]">Blog</span>
+          <span class="label text-muted2">{{ posts | length }} post{% if posts | length != 1 %}s{% endif %}</span>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <a href="/blog" class="border border-line bg-paper px-4 py-2 text-[13px] rounded-full no-underline text-ink hover:border-ink">View blog</a>
+          <a href="/admin/blog/new" class="border border-ink bg-ink text-paper px-[18px] py-2 text-[13px] font-medium rounded-full no-underline hover:bg-[#3d342b] hover:border-[#3d342b]">New post</a>
+        </div>
+      </div>
+    </div>
+
+    <div class="px-9 pb-[72px]">
+      {% if notice %}
+      <div role="status" class="mt-5 border border-line bg-band px-4 py-3 text-[13.5px] text-ink2">{{ notice }}</div>
+      {% endif %}
+
+      <div class="grid grid-cols-[minmax(0,1fr)_96px_150px_110px_64px] gap-[18px] mt-4 pt-3 pb-[9px] border-b border-ink label text-muted2">
+        <div>Post</div>
+        <div>Status</div>
+        <div>Published</div>
+        <div class="text-right">Edited</div>
+        <div><span class="sr-only">Edit</span></div>
+      </div>
+
+      {% for p in posts %}
+      <div class="grid grid-cols-[minmax(0,1fr)_96px_150px_110px_64px] gap-[18px] py-[13px] border-b border-hair items-center {% if p.status == "draft" %}bg-draftrow{% endif %}">
+        <div class="min-w-0">
+          <a href="/admin/blog/{{ p.id }}" class="block font-serif text-[17px] text-ink no-underline hover:text-rustd truncate">{{ p.title }}</a>
+          <div class="text-[12px] text-muted mt-0.5 truncate">/blog/{{ p.slug }}</div>
+        </div>
+        <div><span class="text-[10.5px] tracking-[0.1em] uppercase border px-2 py-[3px] {% if p.status == "published" %}text-muted border-line{% else %}text-rustd border-rustd{% endif %}">{{ p.status }}</span></div>
+        <div class="text-[12.5px] text-muted">{{ p.published }}</div>
+        <div class="text-[12.5px] text-right text-muted">{{ p.edited }}</div>
+        <div class="text-right"><a href="/admin/blog/{{ p.id }}" class="border border-line px-3 py-[5px] label rounded-full no-underline text-ink hover:border-ink">Edit</a></div>
+      </div>
+      {% else %}
+      <div class="py-10 text-[14px] text-muted">No posts yet. <a href="/admin/blog/new" class="text-rustd">Write the first one</a>.</div>
+      {% endfor %}
+    </div>
+  </main>
+</div>
+{% include "admin/partials/foot.html" %}

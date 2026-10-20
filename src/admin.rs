@@ -28,6 +28,10 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/import", get(import_page).post(import_submit))
         .route("/users", get(users_page).post(users_toggle))
         .route("/users/:id", get(user_edit_page).post(user_update))
+        .route("/blog", get(blog_list_page))
+        .route("/blog/new", get(post_new_page).post(post_create))
+        .route("/blog/:id", get(post_edit_page).post(post_update))
+        .route("/blog/:id/delete", post(post_delete))
         .route("/tracks/:slug/toggle-published", post(track_toggle_published))
 }
 
@@ -153,12 +157,13 @@ async fn logout(State(state): State<Arc<AppState>>, jar: CookieJar) -> Response 
 /* ---------- shared: sidebar context ---------- */
 
 async fn sidebar_context(state: &AppState, active: &str, admin: &AdminUser) -> Context {
-    let (nav_questions, nav_flagged, nav_users) = db::nav_counts(&state.db).await;
+    let (nav_questions, nav_flagged, nav_users, nav_posts) = db::nav_counts(&state.db).await;
     let mut ctx = Context::new();
     ctx.insert("active", active);
     ctx.insert("nav_questions", &nav_questions);
     ctx.insert("nav_flagged", &nav_flagged);
     ctx.insert("nav_users", &nav_users);
+    ctx.insert("nav_posts", &nav_posts);
     ctx.insert("admin_name", &admin.name);
     ctx
 }
@@ -975,4 +980,143 @@ async fn users_toggle(State(state): State<Arc<AppState>>, _admin: AdminUser, bod
         }
     }
     Redirect::to("/admin/users").into_response()
+}
+
+/* ---------- blog ---------- */
+
+#[derive(Deserialize)]
+struct BlogListQuery {
+    saved: Option<String>,
+    deleted: Option<String>,
+}
+
+async fn blog_list_page(State(state): State<Arc<AppState>>, admin: AdminUser, Query(bq): Query<BlogListQuery>) -> Response {
+    let mut ctx = sidebar_context(&state, "blog", &admin).await;
+    ctx.insert("posts", &db::admin_posts(&state.db).await);
+    let notice = if bq.deleted.is_some() {
+        Some("Post deleted.")
+    } else if bq.saved.is_some() {
+        Some("Post saved.")
+    } else {
+        None
+    };
+    ctx.insert("notice", &notice);
+    render(&state, "admin/blog.html", &ctx)
+}
+
+/// "Exam day: what to expect!" -> "exam-day-what-to-expect"
+fn slugify(text: &str) -> String {
+    let mut slug = String::new();
+    for c in text.trim().to_lowercase().chars() {
+        if c.is_ascii_alphanumeric() {
+            slug.push(c);
+        } else if !slug.ends_with('-') && !slug.is_empty() {
+            slug.push('-');
+        }
+    }
+    slug.trim_end_matches('-').chars().take(80).collect::<String>().trim_end_matches('-').to_string()
+}
+
+async fn render_post_editor(state: &AppState, admin: &AdminUser, id: Option<i64>, input: &db::PostInput, error: Option<&str>) -> Response {
+    let mut ctx = sidebar_context(state, "blog", admin).await;
+    ctx.insert("post_id", &id);
+    ctx.insert("post_title", &input.title);
+    ctx.insert("post_slug", &input.slug);
+    ctx.insert("post_summary", &input.summary);
+    ctx.insert("post_body", &input.body);
+    ctx.insert("post_status", if input.status == "published" { "published" } else { "draft" });
+    ctx.insert("error", &error);
+    render(state, "admin/blog_edit.html", &ctx)
+}
+
+async fn post_new_page(State(state): State<Arc<AppState>>, admin: AdminUser) -> Response {
+    let input = db::PostInput { status: "draft".to_string(), ..Default::default() };
+    render_post_editor(&state, &admin, None, &input, None).await
+}
+
+async fn post_edit_page(State(state): State<Arc<AppState>>, admin: AdminUser, Path(id): Path<i64>) -> Response {
+    let Some(input) = db::post_for_edit(&state.db, id).await else {
+        return Redirect::to("/admin/blog").into_response();
+    };
+    render_post_editor(&state, &admin, Some(id), &input, None).await
+}
+
+#[derive(Deserialize)]
+struct PostForm {
+    title: String,
+    #[serde(default)]
+    slug: String,
+    #[serde(default)]
+    summary: String,
+    #[serde(default)]
+    body: String,
+    #[serde(default)]
+    status: String,
+}
+
+/// Normalises the form; the slug falls back to one made from the title.
+fn post_input(form: PostForm) -> db::PostInput {
+    let title = form.title.trim().to_string();
+    let slug = slugify(if form.slug.trim().is_empty() { &title } else { &form.slug });
+    db::PostInput {
+        title,
+        slug,
+        summary: form.summary.trim().to_string(),
+        body: form.body,
+        status: if form.status == "published" { "published" } else { "draft" }.to_string(),
+    }
+}
+
+fn post_input_error(input: &db::PostInput) -> Option<&'static str> {
+    if input.title.is_empty() {
+        Some("Give the post a title.")
+    } else if input.slug.is_empty() {
+        Some("The URL slug needs at least one letter or number.")
+    } else if input.status == "published" && input.body.trim().is_empty() {
+        Some("A published post needs a body. Write it, or save as a draft.")
+    } else {
+        None
+    }
+}
+
+async fn save_post_and_return(state: &AppState, admin: &AdminUser, id: Option<i64>, form: PostForm) -> Response {
+    let input = post_input(form);
+    if let Some(error) = post_input_error(&input) {
+        return render_post_editor(state, admin, id, &input, Some(error)).await;
+    }
+    match db::save_post(&state.db, id, &input, admin.id).await {
+        Ok(_) => Redirect::to("/admin/blog?saved=1").into_response(),
+        Err(error) => render_post_editor(state, admin, id, &input, Some(&error)).await,
+    }
+}
+
+async fn post_create(State(state): State<Arc<AppState>>, admin: AdminUser, axum::Form(form): axum::Form<PostForm>) -> Response {
+    save_post_and_return(&state, &admin, None, form).await
+}
+
+async fn post_update(
+    State(state): State<Arc<AppState>>,
+    admin: AdminUser,
+    Path(id): Path<i64>,
+    axum::Form(form): axum::Form<PostForm>,
+) -> Response {
+    save_post_and_return(&state, &admin, Some(id), form).await
+}
+
+async fn post_delete(State(state): State<Arc<AppState>>, _admin: AdminUser, Path(id): Path<i64>) -> Response {
+    db::delete_post(&state.db, id).await;
+    Redirect::to("/admin/blog?deleted=1").into_response()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::slugify;
+
+    #[test]
+    fn slugify_makes_url_safe_slugs() {
+        assert_eq!(slugify("Exam day: what to expect!"), "exam-day-what-to-expect");
+        assert_eq!(slugify("  AWS SAA-C03 -- Tips  "), "aws-saa-c03-tips");
+        assert_eq!(slugify("¡¿!?"), "");
+        assert_eq!(slugify("Kubernetes & CKA 2026"), "kubernetes-cka-2026");
+    }
 }

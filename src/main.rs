@@ -1,6 +1,7 @@
 mod admin;
 mod auth;
 mod db;
+mod markdown;
 mod model;
 
 use axum::{
@@ -57,6 +58,8 @@ async fn main() {
         .route("/login", get(login_page).post(login_submit))
         .route("/signup", post(signup_submit))
         .route("/logout", post(logout))
+        .route("/blog", get(blog_list))
+        .route("/blog/:slug", get(blog_post))
         .route("/quiz/:cert_id", get(quiz_start).post(quiz_step))
         .nest("/admin", admin::router())
         .nest_service("/static", ServeDir::new("static"))
@@ -159,6 +162,35 @@ async fn home(
     ctx.insert("history", &Vec::<String>::new());
     ctx.insert("user_name", &user.map(|u| u.name));
     render(&state, "home.html", &ctx)
+}
+
+/* ---------- blog ---------- */
+
+/// The post list is public; guests' links go through the login page and on
+/// to the post, the same way quiz links do.
+async fn blog_list(State(state): State<Arc<AppState>>, user: Option<CurrentUser>) -> Response {
+    let posts = db::published_posts(&state.db).await;
+    let mut ctx = base_context(&state).await;
+    ctx.insert("posts", &posts);
+    ctx.insert("user_name", &user.map(|u| u.name));
+    render(&state, "blog.html", &ctx)
+}
+
+async fn blog_post(State(state): State<Arc<AppState>>, user: CurrentUser, Path(slug): Path<String>) -> Response {
+    let mut ctx = base_context(&state).await;
+    ctx.insert("user_name", &Some(user.name));
+    let Some(post) = db::published_post(&state.db, &slug).await else {
+        let mut res = render(&state, "blog_missing.html", &ctx);
+        *res.status_mut() = StatusCode::NOT_FOUND;
+        return res;
+    };
+    ctx.insert("post_title", &post.title);
+    ctx.insert("summary", &post.summary);
+    ctx.insert("date", &post.date);
+    ctx.insert("minutes", &post.minutes);
+    ctx.insert("author", &post.author);
+    ctx.insert("body_html", &markdown::to_html(&post.body));
+    render(&state, "blog_post.html", &ctx)
 }
 
 /* ---------- account ---------- */

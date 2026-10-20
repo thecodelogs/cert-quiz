@@ -77,6 +77,8 @@ cargo run                               # http://localhost:3000
 | POST | `/login` | `login_submit` | creates a session, redirects to `next` |
 | POST | `/signup` | `signup_submit` | creates the user with the `user` role, logs them in, redirects to `next` |
 | POST | `/logout` | `logout` | ends the session, redirects to `/` |
+| GET  | `/blog` | `blog_list` | published posts, open to guests. Guests' links go through `/login?next=/blog/<slug>` |
+| GET  | `/blog/:slug` | `blog_post` | **login required**. Renders the Markdown body. Drafts and unknown slugs return 404 (`blog_missing.html`) |
 | GET  | `/quiz/:cert_id` | `quiz_start` | **login required**. `:cert_id` is `certifications.slug` (`saa`, `dva`, `ace`, `pca`, `cka`) |
 | POST | `/quiz/:cert_id` | `quiz_step` | **login required**. next / prev / skip / finish, or renders results |
 | GET  | `/static/*` | `ServeDir` | |
@@ -97,6 +99,9 @@ cargo run                               # http://localhost:3000
 | GET/POST | `/admin/flagged` | learner reports. Actions: `keep`, `retire` |
 | GET/POST | `/admin/import` | bulk paste of JSON or CSV into a track, can save as draft |
 | GET/POST | `/admin/users` | list and search users, suspend or reactivate (`toggle=<email>`) |
+| GET  | `/admin/blog` | list posts (drafts tinted) |
+| GET/POST | `/admin/blog/new`, `/admin/blog/:id` | full-page post editor: title, summary, Markdown body, slug (blank = from title), Draft/Published |
+| POST | `/admin/blog/:id/delete` | delete a post |
 | GET/POST | `/admin/users/:id` | edit panel: name, email and an optional new password (8+ characters, blank keeps the current one). A new password ends the user's other sessions, but keeps the editing admin's own |
 
 ---
@@ -151,6 +156,7 @@ and `history` is an empty list.
   `sort_order`) → `question_options` (`option_index` 0–5 → letters A–F,
   `is_correct`).
 - **Activity:** `attempts` → `attempt_answers` → `attempt_answer_options`.
+- **Blog:** `posts` (`slug` unique, `summary`, Markdown `body`, `status` draft/published, `published_at` set on first publish and kept after, `author_id`). Created by `0032`.
 - **Admin:** `question_flags` (learner reports, open/resolved, resolution
   edited/kept/retired), `imports` (log of each bulk import).
 
