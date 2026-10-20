@@ -7,14 +7,12 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use axum_extra::extract::cookie::{Cookie, CookieJar, SameSite};
+use axum_extra::extract::cookie::CookieJar;
 use serde::Deserialize;
 use sqlx::Row;
 use std::sync::Arc;
 use tera::Context;
 use uuid::Uuid;
-
-const SESSION_COOKIE: &str = "drill_admin_session";
 
 pub fn router() -> Router<Arc<AppState>> {
     Router::new()
@@ -24,6 +22,8 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/questions", get(questions_list_page))
         .route("/questions/new", get(question_new_page).post(question_create))
         .route("/questions/:id", get(question_edit_page).post(question_update))
+        .route("/questions/delete", post(questions_delete))
+        .route("/questions/:id/delete", post(question_delete))
         .route("/flagged", get(flagged_page).post(flagged_action))
         .route("/import", get(import_page).post(import_submit))
         .route("/users", get(users_page).post(users_toggle))
@@ -43,16 +43,15 @@ pub struct AdminUser {
 
 pub enum AdminGate {
     NotLoggedIn,
-    Forbidden,
+    /// Logged in, but without the `admin` role — carries the rendered 403 page.
+    Forbidden(Response),
 }
 
 impl IntoResponse for AdminGate {
     fn into_response(self) -> Response {
         match self {
             AdminGate::NotLoggedIn => Redirect::to("/admin/login").into_response(),
-            AdminGate::Forbidden => {
-                (StatusCode::FORBIDDEN, "This account does not have admin access.").into_response()
-            }
+            AdminGate::Forbidden(page) => page,
         }
     }
 }
@@ -64,12 +63,12 @@ impl FromRequestParts<Arc<AppState>> for AdminUser {
     async fn from_request_parts(parts: &mut Parts, state: &Arc<AppState>) -> Result<Self, Self::Rejection> {
         let jar = CookieJar::from_headers(&parts.headers);
         let session_id = jar
-            .get(SESSION_COOKIE)
+            .get(auth::SESSION_COOKIE)
             .and_then(|c| Uuid::parse_str(c.value()).ok())
             .ok_or(AdminGate::NotLoggedIn)?;
 
         let row = sqlx::query(
-            "select u.id, u.name,
+            "select u.id, u.name, u.email::text as email,
                     exists (
                         select 1 from user_roles ur
                         join roles r on r.id = ur.role_id
@@ -86,7 +85,11 @@ impl FromRequestParts<Arc<AppState>> for AdminUser {
 
         let row = row.ok_or(AdminGate::NotLoggedIn)?;
         if !row.try_get::<bool, _>("is_admin").unwrap_or(false) {
-            return Err(AdminGate::Forbidden);
+            let mut ctx = Context::new();
+            ctx.insert("name", &row.try_get::<String, _>("name").expect("users.name"));
+            ctx.insert("email", &row.try_get::<String, _>("email").expect("users.email"));
+            let page = render(state, "admin/forbidden.html", &ctx);
+            return Err(AdminGate::Forbidden((StatusCode::FORBIDDEN, page).into_response()));
         }
 
         Ok(AdminUser {
@@ -136,38 +139,13 @@ async fn login_submit(State(state): State<Arc<AppState>>, axum::Form(form): axum
         return login_error(&state, "This account has been suspended.");
     }
 
-    let session_row = sqlx::query(
-        "insert into sessions (user_id, expires_at) values ($1, now() + interval '30 days') returning id",
-    )
-    .bind(user_id)
-    .fetch_one(&state.db)
-    .await
-    .expect("failed to create session");
-    let session_id: Uuid = session_row.try_get("id").expect("sessions.id");
-
-    db::touch_last_active(&state.db, user_id).await;
-
-    let cookie = Cookie::build((SESSION_COOKIE, session_id.to_string()))
-        .path("/")
-        .http_only(true)
-        .same_site(SameSite::Lax)
-        .build();
-    let jar = CookieJar::new().add(cookie);
+    let jar = CookieJar::new().add(auth::create_session(&state.db, user_id).await);
 
     (jar, Redirect::to("/admin")).into_response()
 }
 
 async fn logout(State(state): State<Arc<AppState>>, jar: CookieJar) -> Response {
-    if let Some(cookie) = jar.get(SESSION_COOKIE) {
-        if let Ok(session_id) = Uuid::parse_str(cookie.value()) {
-            sqlx::query("delete from sessions where id = $1")
-                .bind(session_id)
-                .execute(&state.db)
-                .await
-                .ok();
-        }
-    }
-    let jar = jar.remove(Cookie::from(SESSION_COOKIE));
+    let jar = auth::end_session(&state.db, jar).await;
     (jar, Redirect::to("/admin/login")).into_response()
 }
 
@@ -211,6 +189,56 @@ async fn track_toggle_published(State(state): State<Arc<AppState>>, _admin: Admi
 
 /* ---------- questions: list + editor drawer ---------- */
 
+/// `/admin/questions?…` with the current filters, sort and page size, and
+/// `set` overriding individual params (an empty value drops one). `page` is
+/// only carried when it's in `set`, so any change of filter, sort or page size
+/// lands back on page 1.
+fn list_href(filter: &db::QuestionFilter, set: &[(&str, String)]) -> String {
+    let current = [
+        ("q", filter.q.clone()),
+        ("track", filter.track.clone()),
+        ("status", filter.status.clone()),
+        ("sort", filter.sort.clone()),
+        ("dir", filter.dir.clone()),
+        ("per_page", filter.per_page.clone()),
+        ("page", None),
+    ];
+    let mut s = form_urlencoded::Serializer::new(String::new());
+    for (key, value) in current {
+        let value = set.iter().find(|(k, _)| *k == key).map(|(_, v)| v.clone()).or(value);
+        if let Some(v) = value.filter(|v| !v.is_empty()) {
+            s.append_pair(key, &v);
+        }
+    }
+    let qs = s.finish();
+    if qs.is_empty() {
+        "/admin/questions".to_string()
+    } else {
+        format!("/admin/questions?{qs}")
+    }
+}
+
+#[derive(serde::Serialize)]
+struct StatusTab {
+    label: &'static str,
+    href: String,
+    active: bool,
+}
+
+/// The All / Live / Draft filter. These are links rather than submit buttons
+/// so each one carries the current search, track, sort and page size.
+fn status_tabs(filter: &db::QuestionFilter) -> Vec<StatusTab> {
+    let current = filter.status.as_deref().unwrap_or("");
+    [("All", ""), ("Live", "live"), ("Draft", "draft")]
+        .into_iter()
+        .map(|(label, value)| StatusTab {
+            label,
+            href: list_href(filter, &[("status", value.to_string())]),
+            active: current == value,
+        })
+        .collect()
+}
+
 #[derive(serde::Serialize)]
 struct SortCol {
     key: &'static str,
@@ -229,29 +257,65 @@ fn sort_cols() -> Vec<SortCol> {
     ]
 }
 
-fn build_base_qs(filter: &db::QuestionFilter) -> String {
-    let mut s = form_urlencoded::Serializer::new(String::new());
-    if let Some(q) = &filter.q {
-        if !q.is_empty() {
-            s.append_pair("q", q);
+#[derive(serde::Serialize)]
+struct SortHeader {
+    label: &'static str,
+    href: String,
+    /// "↓" / "↑" on the active column, empty otherwise.
+    arrow: &'static str,
+    active: bool,
+    numeric: bool,
+}
+
+fn sort_headers(filter: &db::QuestionFilter) -> Vec<SortHeader> {
+    let (sort, dir) = (filter.sort_key(), filter.dir());
+    sort_cols()
+        .into_iter()
+        .map(|col| {
+            let active = col.key == sort;
+            // First click on a column sorts the natural way for it; clicking
+            // the active column flips it.
+            let natural = if matches!(col.key, "edited" | "answered" | "correct") { "desc" } else { "asc" };
+            let next_dir = if active { if dir == "asc" { "desc" } else { "asc" } } else { natural };
+            SortHeader {
+                label: col.label,
+                href: list_href(filter, &[("sort", col.key.to_string()), ("dir", next_dir.to_string())]),
+                arrow: if !active { "" } else if dir == "asc" { "↑" } else { "↓" },
+                active,
+                numeric: matches!(col.key, "answered" | "correct" | "edited"),
+            }
+        })
+        .collect()
+}
+
+#[derive(serde::Serialize)]
+struct PageLink {
+    /// Page number, or "…" for a gap (no href).
+    label: String,
+    href: String,
+    current: bool,
+}
+
+/// Every page when there are a few, otherwise first, last and the pages
+/// around the current one, with "…" for the gaps.
+fn page_links(filter: &db::QuestionFilter, page: i64, pages: i64) -> Vec<PageLink> {
+    let mut out = Vec::new();
+    let mut last_shown = 0;
+    for n in 1..=pages {
+        if pages > 7 && n != 1 && n != pages && (n - page).abs() > 1 {
+            continue;
         }
-    }
-    if let Some(t) = &filter.track {
-        if !t.is_empty() {
-            s.append_pair("track", t);
+        if n - last_shown > 1 {
+            out.push(PageLink { label: "…".to_string(), href: String::new(), current: false });
         }
+        out.push(PageLink {
+            label: n.to_string(),
+            href: list_href(filter, &[("page", n.to_string())]),
+            current: n == page,
+        });
+        last_shown = n;
     }
-    if let Some(st) = &filter.status {
-        if !st.is_empty() {
-            s.append_pair("status", st);
-        }
-    }
-    let out = s.finish();
-    if out.is_empty() {
-        out
-    } else {
-        out + "&"
-    }
+    out
 }
 
 #[derive(serde::Serialize)]
@@ -274,22 +338,39 @@ fn pad_options(existing: &[(String, bool)]) -> Vec<EditableOption> {
 }
 
 async fn build_questions_list_ctx(state: &AppState, admin: &AdminUser, filter: &db::QuestionFilter) -> Context {
-    let rows = db::questions_list(&state.db, filter).await;
+    let list = db::questions_list(&state.db, filter).await;
     let track_options = db::track_options(&state.db).await;
     let grand_total = db::questions_grand_total(&state.db).await;
+    let per_page = filter.per_page();
+    let first = if list.total == 0 { 0 } else { (list.page - 1) * per_page + 1 };
 
     let mut ctx = sidebar_context(state, "questions", admin).await;
-    ctx.insert("rows", &rows);
+    ctx.insert("rows", &list.rows);
     ctx.insert("total", &grand_total);
     ctx.insert("track_count", &track_options.len());
     ctx.insert("track_options", &track_options);
     ctx.insert("filter_q", &filter.q.clone().unwrap_or_default());
     ctx.insert("filter_track", &filter.track.clone().unwrap_or_default());
     ctx.insert("filter_status", &filter.status.clone().unwrap_or_default());
-    ctx.insert("sort", &filter.sort.clone().unwrap_or_else(|| "question".to_string()));
-    ctx.insert("dir", &filter.dir.clone().unwrap_or_else(|| "asc".to_string()));
-    ctx.insert("sort_cols", &sort_cols());
-    ctx.insert("base_qs", &build_base_qs(filter));
+    ctx.insert("filter_sort", &filter.sort.clone().unwrap_or_default());
+    ctx.insert("filter_dir", &filter.dir.clone().unwrap_or_default());
+    ctx.insert("sort_headers", &sort_headers(filter));
+    ctx.insert("status_tabs", &status_tabs(filter));
+
+    ctx.insert("matched", &list.total);
+    ctx.insert("first", &first);
+    ctx.insert("last", &(first + list.rows.len() as i64 - if list.total == 0 { 0 } else { 1 }));
+    ctx.insert("per_page", &per_page);
+    ctx.insert("per_page_options", &db::PER_PAGE_OPTIONS);
+    ctx.insert("page", &list.page);
+    ctx.insert("pages", &list.pages);
+    ctx.insert("page_links", &page_links(filter, list.page, list.pages));
+    let prev = (list.page > 1).then(|| list_href(filter, &[("page", (list.page - 1).to_string())]));
+    let next = (list.page < list.pages).then(|| list_href(filter, &[("page", (list.page + 1).to_string())]));
+    ctx.insert("prev_href", &prev);
+    ctx.insert("next_href", &next);
+    // Where a delete sends you back to: this exact page of this exact list.
+    ctx.insert("back_href", &list_href(filter, &[("page", list.page.to_string())]));
     ctx.insert("drawer_open", &false);
     ctx
 }
@@ -331,13 +412,74 @@ async fn insert_drawer_ctx(
     }
 }
 
+#[derive(Deserialize)]
+struct NoticeQuery {
+    deleted: Option<i64>,
+    retired: Option<i64>,
+}
+
+fn plural(n: i64, one: &str, many: &str) -> String {
+    format!("{n} {}", if n == 1 { one } else { many })
+}
+
+/// The message after a delete, e.g. "2 questions deleted. 1 question was
+/// retired instead …".
+fn delete_notice(nq: &NoticeQuery) -> Option<String> {
+    let (deleted, retired) = (nq.deleted.unwrap_or(0), nq.retired.unwrap_or(0));
+    let mut parts = Vec::new();
+    if deleted > 0 {
+        parts.push(format!("{} deleted.", plural(deleted, "question", "questions")));
+    }
+    if retired > 0 {
+        parts.push(format!(
+            "{} retired instead of deleted, because learners have already answered {}. Retired questions no longer appear in quizzes, and learners' past results are kept.",
+            plural(retired, "question was", "questions were"),
+            if retired == 1 { "it" } else { "them" }
+        ));
+    }
+    (!parts.is_empty()).then(|| parts.join(" "))
+}
+
 async fn questions_list_page(
     State(state): State<Arc<AppState>>,
     admin: AdminUser,
     Query(filter): Query<db::QuestionFilter>,
+    Query(nq): Query<NoticeQuery>,
 ) -> Response {
-    let ctx = build_questions_list_ctx(&state, &admin, &filter).await;
+    let mut ctx = build_questions_list_ctx(&state, &admin, &filter).await;
+    ctx.insert("notice", &delete_notice(&nq));
     render(&state, "admin/questions.html", &ctx)
+}
+
+/// Runs the delete and returns to `back` (only ever a question-list URL) with
+/// the counts for the notice.
+async fn delete_and_return(state: &AppState, ids: &[i64], back: Option<&str>) -> Response {
+    let back = back
+        .filter(|b| *b == "/admin/questions" || b.starts_with("/admin/questions?"))
+        .unwrap_or("/admin/questions");
+    let counts = db::delete_questions(&state.db, ids).await;
+    let sep = if back.contains('?') { '&' } else { '?' };
+    Redirect::to(&format!("{back}{sep}deleted={}&retired={}", counts.deleted, counts.retired)).into_response()
+}
+
+/// The Delete button in the edit sidebar.
+async fn question_delete(State(state): State<Arc<AppState>>, _admin: AdminUser, Path(id): Path<i64>, body: Bytes) -> Response {
+    let back = form_urlencoded::parse(&body).find(|(k, _)| k == "back").map(|(_, v)| v.into_owned());
+    delete_and_return(&state, &[id], back.as_deref()).await
+}
+
+/// "Delete selected" on the list: one `id` per ticked row.
+async fn questions_delete(State(state): State<Arc<AppState>>, _admin: AdminUser, body: Bytes) -> Response {
+    let mut ids = Vec::new();
+    let mut back = None;
+    for (key, value) in form_urlencoded::parse(&body) {
+        match key.as_ref() {
+            "id" => ids.extend(value.parse::<i64>().ok()),
+            "back" => back = Some(value.into_owned()),
+            _ => {}
+        }
+    }
+    delete_and_return(&state, &ids, back.as_deref()).await
 }
 
 #[derive(Deserialize)]
@@ -399,6 +541,11 @@ struct QuestionFormData {
     status: String,
     tags: Vec<String>,
     options: Vec<(String, bool)>,
+    /// For each entry in `options`, the letter slot it came from (A = 0). The
+    /// drawer lists a question's options in `option_index` order, so this is
+    /// the option's index before the edit — `update_question` uses it to keep
+    /// each option's row (and so learners' past picks) attached to it.
+    option_slots: Vec<usize>,
 }
 
 fn parse_question_form(body: &Bytes) -> QuestionFormData {
@@ -437,15 +584,17 @@ fn parse_question_form(body: &Bytes) -> QuestionFormData {
         }
     }
 
-    let options: Vec<(String, bool)> = option_map
-        .into_iter()
-        .filter(|(_, body)| !body.is_empty())
-        .map(|(letter, body)| (body, correct.contains(&letter)))
+    let filled: Vec<(char, String)> = option_map.into_iter().filter(|(_, body)| !body.is_empty()).collect();
+    let option_slots: Vec<usize> = filled
+        .iter()
+        .map(|(letter, _)| crate::model::LETTERS.iter().position(|l| l == letter).unwrap_or(usize::MAX))
         .collect();
+    let options: Vec<(String, bool)> =
+        filled.into_iter().map(|(letter, body)| (body, correct.contains(&letter))).collect();
 
     let tags: Vec<String> = tags_raw.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect();
 
-    QuestionFormData { cert_slug, domain, body: q_body, explain, difficulty, status, tags, options }
+    QuestionFormData { cert_slug, domain, body: q_body, explain, difficulty, status, tags, options, option_slots }
 }
 
 async fn question_create(State(state): State<Arc<AppState>>, admin: AdminUser, body: Bytes) -> Response {
@@ -501,7 +650,7 @@ async fn question_update(State(state): State<Arc<AppState>>, admin: AdminUser, P
         tags: parsed.tags.clone(),
         options: parsed.options.clone(),
     };
-    match db::update_question(&state.db, id, &input).await {
+    match db::update_question(&state.db, id, &input, &parsed.option_slots).await {
         Ok(()) => Redirect::to("/admin/questions").into_response(),
         Err(err) => {
             let filter = db::QuestionFilter::default();

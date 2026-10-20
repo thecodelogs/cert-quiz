@@ -5,6 +5,8 @@ pub const LETTERS: [char; 6] = ['A', 'B', 'C', 'D', 'E', 'F'];
 
 #[derive(Debug, Clone)]
 pub struct Question {
+    /// `questions.id` — what a learner's report is filed against.
+    pub id: i64,
     pub q: String,
     pub options: Vec<String>,
     pub answer: Vec<usize>,

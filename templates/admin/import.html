@@ -26,10 +26,11 @@
         <div>
           <div class="flex flex-wrap items-center gap-3.5">
             <div class="flex border border-line">
-              <label class="border-0 border-r border-edge px-[18px] py-2 label cursor-pointer {% if format != "csv" %}bg-ink text-paper{% else %}bg-transparent text-muted{% endif %}">
+              {# Styled from the radio's live state, so a click shows immediately. #}
+              <label class="border-0 border-r border-edge px-[18px] py-2 label cursor-pointer bg-transparent text-muted hover:text-ink has-[:checked]:bg-ink has-[:checked]:text-paper has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-rust">
                 <input type="radio" name="format" value="json" {% if format != "csv" %}checked{% endif %} class="sr-only" />JSON
               </label>
-              <label class="border-0 px-[18px] py-2 label cursor-pointer {% if format == "csv" %}bg-ink text-paper{% else %}bg-transparent text-muted{% endif %}">
+              <label class="border-0 px-[18px] py-2 label cursor-pointer bg-transparent text-muted hover:text-ink has-[:checked]:bg-ink has-[:checked]:text-paper has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-rust">
                 <input type="radio" name="format" value="csv" {% if format == "csv" %}checked{% endif %} class="sr-only" />CSV
               </label>
             </div>

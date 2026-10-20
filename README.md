@@ -1,51 +1,66 @@
-# Drill — Rust / Axum / Tera
+# Drill — Rust / Axum / Tera / Postgres
 
-Same design and behaviour as the Express version, server-rendered with Tera.
+Practice exams for cloud certifications (AWS, Google Cloud, Kubernetes).
+Learners pick a track, answer a 20-question set one page at a time, and get a
+score with a per-domain breakdown and answer review. Admins manage the
+question bank at `/admin`.
+
+Server-rendered with Axum + Tera, data in PostgreSQL via sqlx.
 
 ```
-rust-app/
-  Cargo.toml
-  src/main.rs           routes, form parsing, view models
-  src/model.rs          Bank/Cert/Question types, scoring
-  data/questions.json   5 certifications, 60 questions
-  templates/
-    home.html           cert index
-    question.html       one question per page
-    results.html        score, domain breakdown, review
-    partials/head.html  doctype, fonts, Tailwind CDN
-    partials/foot.html  client script + close
-  static/
-    tailwind.config.js  theme tokens
-    app.js              elapsed timer
+src/main.rs        startup, learner routes (home, quiz, results)
+src/model.rs       Cert/Question types, scoring (pure)
+src/db.rs          all SQL queries
+src/admin.rs       /admin routes and admin auth gate
+src/auth.rs        Argon2id password hash/verify
+migrations/        schema + seed data, run automatically at startup
+templates/         Tera templates (learner pages + admin/)
+static/            app.js (quiz clock, auth popup), tailwind.config.js
 ```
 
 ## Run
 
-```
-cd rust-app
-cargo run          # http://localhost:3000
+```sh
+docker compose up -d db      # Postgres 16 (user/pass/db = drill)
+cp .env.example .env         # sets DATABASE_URL
+cargo run                    # http://localhost:3000
 ```
 
-Templates and `data/questions.json` are read from the working directory, so run from the crate root (Tera globs `templates/**/*.html` at startup; restart to pick up template edits, or swap in `Tera::full_reload` during development).
+Or run the app and database together: `docker compose up --build`.
+Set `PORT` to listen somewhere other than 3000.
+
+Run from the crate root. `templates/` and `static/` are read from the working
+directory at runtime, and templates are loaded only at startup, so restart
+after editing them. Migrations are embedded at compile time, so rebuild after
+adding one.
+
+Dev logins (seeded):
+
+| email | password | access |
+| --- | --- | --- |
+| `admin@drill.test` | `admin12345` | admin panel |
+| `demo@drill.test` | `demo12345` | learner only |
+
+Hash a new password: `cargo run --example hash_password -- <password>`.
 
 ## Routes
 
-| Method | Path | Renders |
+| Method | Path | What |
 | --- | --- | --- |
-| GET | `/?provider=AWS\|GCP\|K8s\|All` | `home.html` |
-| GET | `/quiz/:cert_id` | `question.html` at question 1 |
-| POST | `/quiz/:cert_id` | next / previous question, or `results.html` |
+| GET | `/?provider=All\|AWS\|GCP\|K8s` | track list |
+| GET / POST | `/login`, `/signup`, `/logout` | learner accounts (log in and sign up on one page) |
+| GET / POST | `/quiz/:slug` | one question per page, then results. Requires login; guests go to `/login` |
+| GET | `/admin` | dashboard (needs the `admin` role) |
+| | `/admin/questions`, `/flagged`, `/import`, `/users` | question bank, learner reports, bulk import, user management |
 
-The quiz is one form per question. Answers so far ride in a hidden `answers` field as JSON and are parsed with `form_urlencoded` (repeated `choice` keys give multi-select), so no session store is needed yet.
+## Deploy
 
-## Where to make it dynamic
+Every push to `main` runs `.github/workflows/deploy.yml`. It builds the release
+binary and copies it to `/opt/drill` on the server over SSH, together with
+`templates/` and `static/`. It then restarts the `drill` systemd service. The
+server needs `DATABASE_URL` set.
 
-- `Bank::load` reads the JSON once at startup — replace with a repository over your database (sqlx/SeaORM); `Bank::cert` and `Cert::set` are the only lookups the handlers use.
-- `Cert::set` returns the first `SET_LENGTH` (20) questions in order; randomise here.
-- `model::score` is pure — reuse it when you persist attempts.
-- `home` inserts `history: []`; feed it `{ name, when, time, pct }` rows once attempts are stored, and replace `best_label` per cert.
-- To move answers server-side, put `Answers` in a session (e.g. `tower-sessions`) and drop the hidden fields.
+## More
 
-## Production Tailwind
-
-The CDN compiles in the browser. For production, build a stylesheet with the Tailwind CLI (`content: ['./templates/**/*.html']`), write it to `static/`, and replace the two `<script>` tags in `partials/head.html` with a `<link>`.
+- [`PROJECT.md`](PROJECT.md): how the code works, conventions, and known gaps / TODO.
+- [`db.md`](db.md): database schema and the reasoning behind it.

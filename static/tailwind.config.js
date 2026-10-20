@@ -7,7 +7,7 @@ tailwind.config = {
         ink: '#241f1a', ink2: '#4e463d',
         muted: '#6f6659', muted2: '#6b6255', faint: '#7f7568',
         rust: '#b4531f', rustd: '#9a4620',
-        pick: '#efe6d5', right: '#eae2cf', wrong: '#f6e3d9'
+        pick: '#efe6d5', correct: '#eae2cf', wrong: '#f6e3d9'
       },
       fontFamily: {
         serif: ['Newsreader', 'Georgia', 'serif'],

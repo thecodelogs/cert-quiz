@@ -122,6 +122,7 @@ pub async fn load_cert(pool: &PgPool, slug: &str) -> Option<Cert> {
         }
 
         questions.push(Question {
+            id: question_id,
             q: q_row.try_get("body").expect("questions.body"),
             options,
             answer,
@@ -431,12 +432,59 @@ pub async fn toggle_track_published(pool: &PgPool, slug: &str) {
 /* ================= admin: questions ================= */
 
 #[derive(Default, serde::Deserialize)]
+/// Query-string filters for the admin question list. An empty value (the
+/// "All tracks" option, the All status) means "don't filter", same as absent.
 pub struct QuestionFilter {
     pub q: Option<String>,
     pub track: Option<String>,
     pub status: Option<String>,
     pub sort: Option<String>,
     pub dir: Option<String>,
+    pub page: Option<String>,
+    pub per_page: Option<String>,
+}
+
+pub const PER_PAGE_OPTIONS: [i64; 3] = [10, 15, 20];
+
+impl QuestionFilter {
+    /// Newest activity first unless a column header picked something else, so a
+    /// question that was just created or edited is at the top of page 1.
+    pub fn sort_key(&self) -> &str {
+        self.sort.as_deref().filter(|s| !s.is_empty()).unwrap_or("edited")
+    }
+
+    pub fn dir(&self) -> &str {
+        match self.dir.as_deref() {
+            Some("asc") => "asc",
+            Some("desc") => "desc",
+            _ if self.sort_key() == "edited" => "desc",
+            _ => "asc",
+        }
+    }
+
+    /// Only the offered sizes are accepted; anything else falls back to the first.
+    pub fn per_page(&self) -> i64 {
+        self.per_page
+            .as_deref()
+            .and_then(|p| p.parse().ok())
+            .filter(|p| PER_PAGE_OPTIONS.contains(p))
+            .unwrap_or(PER_PAGE_OPTIONS[0])
+    }
+
+    /// 1-based page as requested; `questions_list` clamps it to the last page.
+    pub fn page(&self) -> i64 {
+        self.page.as_deref().and_then(|p| p.parse().ok()).filter(|&p| p >= 1).unwrap_or(1)
+    }
+}
+
+/// One page of the filtered list, plus what the pager needs.
+pub struct QuestionPage {
+    pub rows: Vec<QuestionRow>,
+    /// Questions matching the filters, across all pages.
+    pub total: i64,
+    /// The page actually shown (after clamping), 1-based.
+    pub page: i64,
+    pub pages: i64,
 }
 
 #[derive(serde::Serialize)]
@@ -452,17 +500,42 @@ pub struct QuestionRow {
     pub edited: String,
 }
 
-pub async fn questions_list(pool: &PgPool, filter: &QuestionFilter) -> Vec<QuestionRow> {
-    let sort_col = match filter.sort.as_deref() {
-        Some("track") => "c.code",
-        Some("domain") => "d.name",
-        Some("status") => "q.status",
-        Some("answered") => "answered",
-        Some("correct") => "correct_pct",
-        Some("edited") => "q.updated_at",
-        _ => "q.body",
+/// Shared by the count and the page query so they always agree.
+const QUESTION_FILTER_SQL: &str = "(nullif($1::text, '') is null or q.body ilike '%' || $1 || '%' or c.code ilike '%' || $1 || '%')
+           and (nullif($2::text, '') is null or c.slug = $2)
+           and (nullif($3::text, '') is null or q.status = $3)";
+
+pub async fn questions_list(pool: &PgPool, filter: &QuestionFilter) -> QuestionPage {
+    let sort_col = match filter.sort_key() {
+        "question" => "q.body",
+        "track" => "c.code",
+        "domain" => "d.name",
+        "status" => "q.status",
+        "answered" => "answered",
+        "correct" => "correct_pct",
+        _ => "q.updated_at",
     };
-    let dir = if filter.dir.as_deref() == Some("desc") { "desc" } else { "asc" };
+    let dir = filter.dir();
+
+    let count_sql = format!(
+        "select count(*) as n
+         from questions q
+         join certifications c on c.id = q.certification_id
+         where {QUESTION_FILTER_SQL}"
+    );
+    let total: i64 = sqlx::query(sqlx::AssertSqlSafe(count_sql))
+        .bind(&filter.q)
+        .bind(&filter.track)
+        .bind(&filter.status)
+        .fetch_one(pool)
+        .await
+        .expect("failed to count questions")
+        .try_get("n")
+        .expect("n");
+
+    let per_page = filter.per_page();
+    let pages = ((total + per_page - 1) / per_page).max(1);
+    let page = filter.page().min(pages);
 
     let sql = format!(
         "select q.id, q.body, c.code as cert_code, d.name as domain, q.status,
@@ -475,11 +548,10 @@ pub async fn questions_list(pool: &PgPool, filter: &QuestionFilter) -> Vec<Quest
          join domains d on d.id = q.domain_id
          left join question_options qo on qo.question_id = q.id
          left join attempt_answers aa on aa.question_id = q.id
-         where ($1::text is null or q.body ilike '%' || $1 || '%' or c.code ilike '%' || $1 || '%')
-           and ($2::text is null or c.slug = $2)
-           and ($3::text is null or q.status = $3)
+         where {QUESTION_FILTER_SQL}
          group by q.id, c.code, d.name
-         order by {sort_col} {dir}, q.id"
+         order by {sort_col} {dir} nulls last, q.id desc
+         limit $4 offset $5"
     );
 
     // sort_col/dir are chosen from fixed match arms above, never from raw
@@ -488,11 +560,14 @@ pub async fn questions_list(pool: &PgPool, filter: &QuestionFilter) -> Vec<Quest
         .bind(&filter.q)
         .bind(&filter.track)
         .bind(&filter.status)
+        .bind(per_page)
+        .bind((page - 1) * per_page)
         .fetch_all(pool)
         .await
         .expect("failed to load questions list");
 
-    rows.into_iter()
+    let rows = rows
+        .into_iter()
         .map(|row| {
             let correct_options: i64 = row.try_get("correct_options").expect("correct_options");
             let days_ago: i64 = row.try_get("days_ago").expect("days_ago");
@@ -508,7 +583,9 @@ pub async fn questions_list(pool: &PgPool, filter: &QuestionFilter) -> Vec<Quest
                 edited: relative_days(days_ago),
             }
         })
-        .collect()
+        .collect();
+
+    QuestionPage { rows, total, page, pages }
 }
 
 #[derive(serde::Serialize)]
@@ -687,7 +764,15 @@ pub async fn insert_question(pool: &PgPool, input: &NewQuestionInput<'_>) -> Res
     Ok(question_id)
 }
 
-pub async fn update_question(pool: &PgPool, id: i64, input: &NewQuestionInput<'_>) -> Result<(), String> {
+/// `slots[i]` is the `option_index` that `input.options[i]` had before the
+/// edit (see `QuestionFormData::option_slots`); a slot with no existing row is
+/// a newly added option.
+pub async fn update_question(
+    pool: &PgPool,
+    id: i64,
+    input: &NewQuestionInput<'_>,
+    slots: &[usize],
+) -> Result<(), String> {
     let domain_row = sqlx::query(
         "select d.id from domains d
          join questions q on q.certification_id = d.certification_id
@@ -710,6 +795,10 @@ pub async fn update_question(pool: &PgPool, id: i64, input: &NewQuestionInput<'_
         return Err("at least one option must be marked correct".to_string());
     }
 
+    // One transaction: either the question and all of its options are saved,
+    // or nothing is.
+    let mut tx = pool.begin().await.expect("failed to begin transaction");
+
     sqlx::query(
         "update questions
          set body = $1, explain = $2, domain_id = $3, difficulty = $4, status = $5, tags = $6, updated_at = now()
@@ -722,30 +811,122 @@ pub async fn update_question(pool: &PgPool, id: i64, input: &NewQuestionInput<'_
     .bind(input.status)
     .bind(&input.tags)
     .bind(id)
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .expect("failed to update question");
 
-    sqlx::query("delete from question_options where question_id = $1")
-        .bind(id)
-        .execute(pool)
-        .await
-        .expect("failed to clear old options");
+    // Options keep their rows across an edit rather than being deleted and
+    // re-inserted: past attempts reference option rows by id
+    // (attempt_answer_options), so those rows have to survive, and still
+    // mean the same option, when the text changes or letters shift.
+    let slots_i16: Vec<i16> = slots.iter().map(|&s| s as i16).collect();
 
-    for (idx, (body, is_correct)) in input.options.iter().enumerate() {
-        sqlx::query(
-            "insert into question_options (question_id, option_index, body, is_correct) values ($1, $2, $3, $4)",
-        )
+    // Options cleared in the editor. One a learner has picked can't be
+    // deleted without rewriting their history.
+    let picked_removed = sqlx::query(
+        "select o.option_index from question_options o
+         where o.question_id = $1 and not (o.option_index = any($2))
+           and exists (select 1 from attempt_answer_options aao where aao.question_option_id = o.id)
+         order by o.option_index",
+    )
+    .bind(id)
+    .bind(&slots_i16)
+    .fetch_all(&mut *tx)
+    .await
+    .expect("failed to check removed options");
+    if !picked_removed.is_empty() {
+        let letters: Vec<String> = picked_removed
+            .iter()
+            .map(|row| crate::model::LETTERS[row.try_get::<i16, _>("option_index").expect("option_index") as usize].to_string())
+            .collect();
+        // Returning drops tx, which rolls back the question update above too.
+        return Err(format!(
+            "option {} can't be removed because learners have picked it in past attempts. Edit its text instead, or retire this question and create a new one.",
+            letters.join(", ")
+        ));
+    }
+
+    sqlx::query("delete from question_options where question_id = $1 and not (option_index = any($2))")
         .bind(id)
+        .bind(&slots_i16)
+        .execute(&mut *tx)
+        .await
+        .expect("failed to remove old options");
+
+    // Park the surviving rows out of the 0–5 range so renumbering them can't
+    // trip unique (question_id, option_index) halfway through.
+    sqlx::query("update question_options set option_index = option_index + 100 where question_id = $1")
+        .bind(id)
+        .execute(&mut *tx)
+        .await
+        .expect("failed to renumber options");
+
+    for (idx, ((body, is_correct), slot)) in input.options.iter().zip(&slots_i16).enumerate() {
+        let updated = sqlx::query(
+            "update question_options set option_index = $1, body = $2, is_correct = $3
+             where question_id = $4 and option_index = $5 + 100",
+        )
         .bind(idx as i16)
         .bind(body)
         .bind(is_correct)
-        .execute(pool)
+        .bind(id)
+        .bind(slot)
+        .execute(&mut *tx)
         .await
-        .expect("failed to insert question option");
+        .expect("failed to update question option");
+
+        if updated.rows_affected() == 0 {
+            sqlx::query(
+                "insert into question_options (question_id, option_index, body, is_correct) values ($1, $2, $3, $4)",
+            )
+            .bind(id)
+            .bind(idx as i16)
+            .bind(body)
+            .bind(is_correct)
+            .execute(&mut *tx)
+            .await
+            .expect("failed to insert question option");
+        }
     }
 
+    tx.commit().await.expect("failed to commit question update");
     Ok(())
+}
+
+/// How many of the requested questions were deleted and how many retired.
+pub struct DeleteCounts {
+    pub deleted: i64,
+    pub retired: i64,
+}
+
+/// Hard-deletes questions nobody has answered (options and flags cascade).
+/// Ones a learner has answered are retired instead, since `attempt_answers`
+/// must keep pointing at them. All in one transaction.
+pub async fn delete_questions(pool: &PgPool, ids: &[i64]) -> DeleteCounts {
+    let mut tx = pool.begin().await.expect("failed to begin transaction");
+
+    let retired = sqlx::query(
+        "update questions set status = 'retired', updated_at = now()
+         where id = any($1) and exists (select 1 from attempt_answers a where a.question_id = questions.id)",
+    )
+    .bind(ids)
+    .execute(&mut *tx)
+    .await
+    .expect("failed to retire questions")
+    .rows_affected() as i64;
+
+    let deleted = sqlx::query(
+        "delete from questions
+         where id = any($1) and not exists (select 1 from attempt_answers a where a.question_id = questions.id)",
+    )
+    .bind(ids)
+    .execute(&mut *tx)
+    .await
+    .expect("failed to delete questions")
+    .rows_affected() as i64;
+
+    tx.commit().await.expect("failed to commit question delete");
+    DeleteCounts { deleted, retired }
 }
 
 /* ================= admin: flagged ================= */
@@ -753,6 +934,11 @@ pub async fn update_question(pool: &PgPool, id: i64, input: &NewQuestionInput<'_
 #[derive(serde::Serialize)]
 pub struct FlaggedComment {
     pub text: String,
+    /// Who reported it, so they can be told when the question is fixed. Both
+    /// are `None` if the account was deleted (`reported_by` is set null).
+    pub reporter_name: Option<String>,
+    pub reporter_email: Option<String>,
+    pub when: String,
 }
 
 #[derive(serde::Serialize)]
@@ -795,7 +981,12 @@ pub async fn flagged_list(pool: &PgPool) -> Vec<FlaggedGroup> {
             .expect("failed to load flagged question options");
 
         let comment_rows = sqlx::query(
-            "select comment from question_flags where question_id = $1 and status = 'open' order by created_at",
+            "select f.comment, u.name, u.email::text as email,
+                    extract(day from now() - f.created_at)::bigint as days_ago
+             from question_flags f
+             left join users u on u.id = f.reported_by
+             where f.question_id = $1 and f.status = 'open'
+             order by f.created_at",
         )
         .bind(question_id)
         .fetch_all(pool)
@@ -822,6 +1013,9 @@ pub async fn flagged_list(pool: &PgPool) -> Vec<FlaggedGroup> {
                 .into_iter()
                 .map(|r| FlaggedComment {
                     text: r.try_get("comment").expect("comment"),
+                    reporter_name: r.try_get("name").expect("users.name"),
+                    reporter_email: r.try_get("email").expect("users.email"),
+                    when: relative_days(r.try_get("days_ago").expect("days_ago")),
                 })
                 .collect(),
             when: relative_days(days_ago),
@@ -850,6 +1044,26 @@ pub async fn resolve_flags(pool: &PgPool, question_id: i64, resolution: &str) {
             .await
             .expect("failed to retire question");
     }
+}
+
+/// A learner's report against a question, shown on the admin Flagged page.
+/// A second report from the same person while their first is still open is
+/// ignored, so resubmitting doesn't pile up duplicates.
+pub async fn flag_question(pool: &PgPool, question_id: i64, comment: &str, user_id: Uuid) {
+    sqlx::query(
+        "insert into question_flags (question_id, comment, reported_by)
+         select $1, $2, $3
+         where not exists (
+             select 1 from question_flags
+             where question_id = $1 and reported_by = $3 and status = 'open'
+         )",
+    )
+    .bind(question_id)
+    .bind(comment)
+    .bind(user_id)
+    .execute(pool)
+    .await
+    .expect("failed to flag question");
 }
 
 /* ================= admin: import ================= */
@@ -984,6 +1198,52 @@ pub async fn touch_last_active(pool: &PgPool, user_id: Uuid) {
         .execute(pool)
         .await
         .ok();
+}
+
+/* ================= learner accounts ================= */
+
+/// (id, password_hash, status) for a login attempt; email matching is
+/// case-insensitive because the column is citext.
+pub async fn user_for_login(pool: &PgPool, email: &str) -> Option<(Uuid, String, String)> {
+    let row = sqlx::query("select id, password_hash, status from users where email = $1")
+        .bind(email)
+        .fetch_optional(pool)
+        .await
+        .expect("user lookup failed")?;
+    Some((
+        row.try_get("id").expect("users.id"),
+        row.try_get("password_hash").expect("users.password_hash"),
+        row.try_get("status").expect("users.status"),
+    ))
+}
+
+/// Creates a learner account holding the `user` role. `Err` carries a
+/// message fit to show on the signup form.
+pub async fn create_user(pool: &PgPool, name: &str, email: &str, password_hash: &str) -> Result<Uuid, String> {
+    let mut tx = pool.begin().await.expect("failed to begin transaction");
+
+    let inserted = sqlx::query("insert into users (name, email, password_hash) values ($1, $2, $3) returning id")
+        .bind(name)
+        .bind(email)
+        .bind(password_hash)
+        .fetch_one(&mut *tx)
+        .await;
+    let user_id: Uuid = match inserted {
+        Ok(row) => row.try_get("id").expect("users.id"),
+        Err(sqlx::Error::Database(e)) if e.is_unique_violation() => {
+            return Err("An account with that email already exists.".to_string());
+        }
+        Err(e) => panic!("failed to create user: {e}"),
+    };
+
+    sqlx::query("insert into user_roles (user_id, role_id) select $1, id from roles where name = 'user'")
+        .bind(user_id)
+        .execute(&mut *tx)
+        .await
+        .expect("failed to grant user role");
+
+    tx.commit().await.expect("failed to commit signup");
+    Ok(user_id)
 }
 
 /* ================= admin: sidebar ================= */

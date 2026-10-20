@@ -3,7 +3,7 @@
       <a href="/admin/questions" aria-label="Close editor" class="absolute inset-0 border-0 bg-[rgba(36,31,26,0.28)] cursor-pointer block"></a>
 
       <div class="absolute top-0 right-0 bottom-0 w-[560px] bg-paper border-l border-line shadow-[-18px_0_46px_rgba(36,31,26,0.16)] flex flex-col">
-        <form method="post" action="{% if drawer_mode == 'edit' %}/admin/questions/{{ q_id }}{% else %}/admin/questions/new{% endif %}" class="flex flex-col flex-1 min-h-0">
+        <form method="post" action="{% if drawer_mode == 'edit' %}/admin/questions/{{ q_id }}{% else %}/admin/questions/new{% endif %}" class="group/drawer flex flex-col flex-1 min-h-0">
         <div class="bg-band border-b border-edge px-6 py-4 flex items-center justify-between gap-4">
           <div>
             <div class="font-serif text-[21px] tracking-[-0.02em]">{% if drawer_mode == 'edit' %}Edit question{% else %}New question{% endif %}</div>
@@ -33,7 +33,8 @@
               <div class="flex flex-col gap-[7px]">
                 {% for opt in options %}
                 <div class="grid grid-cols-[34px_minmax(0,1fr)_30px] gap-2 items-center">
-                  <label title="Mark correct" class="h-[34px] border font-serif text-[15px] cursor-pointer flex items-center justify-center {% if opt.correct %}border-ink bg-ink text-paper{% else %}border-line bg-transparent text-faint{% endif %}">
+                  {# Styled from the checkbox's live state, so a click shows immediately. #}
+                  <label title="Mark correct" class="h-[34px] border font-serif text-[15px] cursor-pointer flex items-center justify-center border-line bg-transparent text-faint hover:border-ink has-[:checked]:border-ink has-[:checked]:bg-ink has-[:checked]:text-paper has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-rust">
                     <input type="checkbox" name="correct" value="{{ opt.letter }}" {% if opt.correct %}checked{% endif %} class="sr-only" />{{ opt.letter }}
                   </label>
                   <input name="option_{{ opt.letter }}" value="{{ opt.body }}" class="border border-line bg-field px-[11px] py-2 text-[14px]" />
@@ -73,11 +74,12 @@
 
             <div>
               <div class="label text-muted2 mb-2">Status</div>
+              {# Segments are styled from the radio's live state, so a click shows immediately. #}
               <div class="flex border border-line w-fit">
-                <label class="border-0 border-r border-edge px-5 py-2 text-[11.5px] tracking-[0.1em] uppercase cursor-pointer {% if status == 'draft' %}bg-ink text-paper{% else %}bg-transparent text-muted{% endif %}">
-                  <input type="radio" name="status" value="draft" {% if status == 'draft' %}checked{% endif %} class="sr-only" />Draft
+                <label class="border-0 border-r border-edge px-5 py-2 text-[11.5px] tracking-[0.1em] uppercase cursor-pointer bg-transparent text-muted hover:text-ink has-[:checked]:bg-ink has-[:checked]:text-paper has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-rust">
+                  <input type="radio" id="status-draft" name="status" value="draft" {% if status == 'draft' %}checked{% endif %} class="sr-only" />Draft
                 </label>
-                <label class="border-0 px-5 py-2 text-[11.5px] tracking-[0.1em] uppercase cursor-pointer {% if status != 'draft' %}bg-ink text-paper{% else %}bg-transparent text-muted{% endif %}">
+                <label class="border-0 px-5 py-2 text-[11.5px] tracking-[0.1em] uppercase cursor-pointer bg-transparent text-muted hover:text-ink has-[:checked]:bg-ink has-[:checked]:text-paper has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-inset has-[:focus-visible]:ring-rust">
                   <input type="radio" name="status" value="live" {% if status != 'draft' %}checked{% endif %} class="sr-only" />Live
                 </label>
               </div>
@@ -86,13 +88,28 @@
         </div>
 
         <div class="border-t border-edge bg-band px-6 py-3.5 flex items-center justify-between gap-4">
-          <div class="text-[12px] text-muted">{% if status == 'draft' %}Draft — not visible to learners{% else %}Ready to publish{% endif %}</div>
+          <div class="flex items-center gap-4 text-[12px] text-muted">
+            {% if drawer_mode == 'edit' %}
+            {# Forms can't nest, so this submits the separate form below the drawer's own. #}
+            <button type="submit" form="drawer-delete" class="border border-rustd bg-transparent text-rustd px-4 py-[9px] text-[13px] rounded-full cursor-pointer hover:bg-rustd hover:text-paper">Delete</button>
+            {% endif %}
+            <span>
+            <span class="hidden group-has-[#status-draft:checked]/drawer:inline">Draft — not visible to learners</span>
+            <span class="group-has-[#status-draft:checked]/drawer:hidden">Ready to publish</span>
+            </span>
+          </div>
           <div class="flex gap-2">
             <a href="/admin/questions" class="border border-line bg-paper px-[18px] py-[9px] text-[13px] rounded-full no-underline text-ink hover:border-ink">Cancel</a>
             <button type="submit" class="border border-ink bg-ink text-paper px-5 py-[9px] text-[13px] font-medium rounded-full cursor-pointer hover:bg-[#3d342b]">Save</button>
           </div>
         </div>
         </form>
+        {% if drawer_mode == 'edit' %}
+        <form id="drawer-delete" method="post" action="/admin/questions/{{ q_id }}/delete" class="hidden"
+              onsubmit="return confirm('Delete this question? If learners have already answered it, it will be retired instead so their results are kept.');">
+          <input type="hidden" name="back" value="{{ back_href }}" />
+        </form>
+        {% endif %}
       </div>
     </div>
 {% endif %}

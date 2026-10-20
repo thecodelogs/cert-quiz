@@ -1,53 +1,21 @@
 {% set title = "Drill — certification practice" %}{% include "partials/head.html" %}
+{# Guests go to the login page first, then on to the quiz they picked. #}
+{% if user_name %}{% set quiz_prefix = "/quiz/" %}{% else %}{% set quiz_prefix = "/login?next=/quiz/" %}{% endif %}
 
 <div class="bg-band border-b border-edge">
   <div class="max-w-[1180px] mx-auto px-14 py-6 flex items-baseline justify-between gap-6">
     <a href="/" class="font-serif text-[24px] font-medium tracking-[-0.01em] no-underline text-ink">Drill<span class="text-rust">.</span></a>
     <div class="flex items-baseline gap-7">
       <div class="label text-muted2">{{ total_questions }} questions · {{ tracks }} tracks</div>
-      <button type="button" id="authOpen" class="label !text-[13px] font-medium text-ink border border-line rounded-full px-[18px] py-[9px] bg-transparent cursor-pointer hover:border-ink">Log in</button>
+      {% if user_name %}
+        <span class="label !text-[13px] text-ink">{{ user_name }}</span>
+        <form method="post" action="/logout" class="m-0">
+          <button type="submit" class="label !text-[13px] font-medium text-ink border border-line rounded-full px-[18px] py-[9px] bg-transparent cursor-pointer hover:border-ink">Log out</button>
+        </form>
+      {% else %}
+        <a href="/login" class="label !text-[13px] font-medium text-ink no-underline border border-line rounded-full px-[18px] py-[9px] hover:border-ink">Log in</a>
+      {% endif %}
     </div>
-  </div>
-</div>
-
-<div id="authOverlay" class="hidden fixed inset-0 bg-[#241f1a]/40 z-50 items-center justify-center p-6">
-  <div class="bg-paper border border-line rounded-[18px] w-full max-w-[420px] p-10 relative">
-    <button type="button" id="authClose" aria-label="Close" class="absolute top-5 right-5 text-muted hover:text-ink bg-transparent border-0 cursor-pointer text-[20px] leading-none">×</button>
-
-    <div class="flex gap-7 border-b border-rule mb-8">
-      <button type="button" id="tabLogin" class="label !text-[13px] font-medium pb-3 -mb-px border-b-2 border-ink text-ink bg-transparent cursor-pointer">Log in</button>
-      <button type="button" id="tabSignup" class="label !text-[13px] font-medium pb-3 -mb-px border-b-2 border-transparent text-muted hover:text-ink bg-transparent cursor-pointer">Sign up</button>
-    </div>
-
-    <form id="formLogin" class="flex flex-col gap-4">
-      <h3 class="font-serif text-[26px] font-normal tracking-[-0.02em] m-0 mb-1">Welcome back</h3>
-      <label class="flex flex-col gap-2 label !text-[11px] text-muted">Email
-        <input type="email" required class="font-sans normal-case tracking-normal text-[15px] text-ink border border-line rounded-lg px-4 py-3 bg-paper" />
-      </label>
-      <label class="flex flex-col gap-2 label !text-[11px] text-muted">Password
-        <input type="password" required class="font-sans normal-case tracking-normal text-[15px] text-ink border border-line rounded-lg px-4 py-3 bg-paper" />
-      </label>
-      <button type="submit" class="mt-2 border border-ink bg-ink text-paper rounded-full px-8 py-[15px] text-[15px] font-medium cursor-pointer hover:bg-[#3d342b] hover:border-[#3d342b]">Log in</button>
-    </form>
-
-    <form id="formSignup" class="hidden flex-col gap-4">
-      <h3 class="font-serif text-[26px] font-normal tracking-[-0.02em] m-0 mb-1">Create an account</h3>
-      <label class="flex flex-col gap-2 label !text-[11px] text-muted">Name
-        <input type="text" required class="font-sans normal-case tracking-normal text-[15px] text-ink border border-line rounded-lg px-4 py-3 bg-paper" />
-      </label>
-      <label class="flex flex-col gap-2 label !text-[11px] text-muted">Email
-        <input type="email" required class="font-sans normal-case tracking-normal text-[15px] text-ink border border-line rounded-lg px-4 py-3 bg-paper" />
-      </label>
-      <label class="flex flex-col gap-2 label !text-[11px] text-muted">Password
-        <input type="password" required class="font-sans normal-case tracking-normal text-[15px] text-ink border border-line rounded-lg px-4 py-3 bg-paper" />
-      </label>
-      <button type="submit" class="mt-2 border border-ink bg-ink text-paper rounded-full px-8 py-[15px] text-[15px] font-medium cursor-pointer hover:bg-[#3d342b] hover:border-[#3d342b]">Sign up</button>
-    </form>
-
-    <p class="text-[13px] text-muted mt-6 mb-0">
-      <span id="promptLogin">New here? <a href="#" id="switchToSignup" class="text-rustd">Create an account</a></span>
-      <span id="promptSignup" class="hidden">Already have an account? <a href="#" id="switchToLogin" class="text-rustd">Log in</a></span>
-    </p>
   </div>
 </div>
 
@@ -68,7 +36,7 @@
   </div>
 
   {% for cert in certs %}
-    <a href="/quiz/{{ cert.id }}" class="block no-underline text-ink border-b border-rule py-8 grid grid-cols-[128px_minmax(0,1fr)_220px] gap-10 items-baseline hover:bg-[#f1e9da]">
+    <a href="{{ quiz_prefix }}{{ cert.id }}" class="block no-underline text-ink border-b border-rule py-8 grid grid-cols-[128px_minmax(0,1fr)_220px] gap-10 items-baseline hover:bg-[#f1e9da]">
       <span class="label text-rustd">{{ cert.code }}</span>
       <span>
         <span class="block font-serif text-[34px] leading-[1.15] tracking-[-0.02em]">{{ cert.name }}</span>
@@ -103,7 +71,7 @@
       <div class="font-serif text-[27px] tracking-[-0.02em]">Not sure where you stand?</div>
       <div class="label !text-[13px] text-muted2 mt-2.5">Drill · {{ total_questions }} questions across {{ tracks }} tracks</div>
     </div>
-    <a href="/quiz/{{ first_cert }}" class="border border-line bg-paper px-[30px] py-[18px] font-serif text-[19px] rounded-full no-underline text-ink hover:bg-ink hover:text-paper hover:border-ink">Start the first track, cold →</a>
+    <a href="{{ quiz_prefix }}{{ first_cert }}" class="border border-line bg-paper px-[30px] py-[18px] font-serif text-[19px] rounded-full no-underline text-ink hover:bg-ink hover:text-paper hover:border-ink">Start the first track, cold →</a>
   </div>
 </div>
 

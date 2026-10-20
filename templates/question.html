@@ -16,9 +16,10 @@
       </div>
       <div class="flex items-center gap-[22px]">
         <span id="clock" data-elapsed="{{ elapsed }}">00:00</span>
-        <button type="submit"
+        <button type="submit" aria-pressed="{% if instant %}true{% else %}false{% endif %}"
+                title="{% if instant %}On: each answer is checked as you go, with the explanation. Click to switch to exam mode, where results come at the end.{% else %}Off: exam mode, results come at the end. Click to check each answer as you go and see the explanation.{% endif %}"
                 onclick="document.getElementById('action').value='stay'; document.getElementById('instant').value='{{ instant_next }}';"
-                class="rounded-full px-[15px] py-[7px] label-sm cursor-pointer border {% if instant %}bg-ink text-paper border-ink{% else %}bg-transparent text-muted border-line{% endif %}">Instant · {% if instant %}on{% else %}off{% endif %}</button>
+                class="rounded-full px-[15px] py-[7px] label-sm cursor-pointer border {% if instant %}bg-ink text-paper border-ink{% else %}bg-transparent text-muted border-line{% endif %}">Show answers · {% if instant %}on{% else %}off{% endif %}</button>
         <a href="/" class="label-sm text-muted hover:text-rustd no-underline">Exit</a>
       </div>
     </div>
@@ -34,13 +35,18 @@
 
     <div class="flex flex-col gap-0.5">
       {% for opt in options %}
-        <label class="flex items-start gap-[22px] px-6 py-[22px] border-l-[3px] {{ opt.rule_class }} {{ opt.bg_class }} cursor-pointer has-[:checked]:border-l-ink has-[:checked]:bg-pick">
-          <input type="{{ input_type }}" name="choice" value="{{ opt.value }}" class="sr-only"{% if opt.checked %} checked{% endif %} />
+        {# After "Check answer" the pick is locked; the server ignores changes too. #}
+        <label class="flex items-start gap-[22px] px-6 py-[22px] border-l-[3px] {{ opt.rule_class }} {{ opt.bg_class }} {% if revealed %}cursor-default{% else %}cursor-pointer has-[:checked]:border-l-ink has-[:checked]:bg-pick{% endif %}">
+          <input type="{{ input_type }}" name="choice" value="{{ opt.value }}" class="sr-only"{% if opt.checked %} checked{% endif %}{% if revealed %} disabled{% endif %} />
           <span class="shrink-0 font-serif text-[20px] w-[18px] {{ opt.letter_class }}">{{ opt.letter }}</span>
           <span class="font-serif text-[20px] leading-[1.5] text-ink">{{ opt.text }}</span>
         </label>
       {% endfor %}
     </div>
+
+    {% if need_pick %}
+      <div role="status" class="mt-[34px] text-[15px] text-rustd">Pick an answer to check it, or use Skip to move on.</div>
+    {% endif %}
 
     {% if revealed %}
       <div class="mt-[34px] pt-6 border-t border-rule">
@@ -51,13 +57,39 @@
 
     <div class="flex flex-wrap items-center gap-[18px] mt-14 pt-7 border-t border-rule">
       <button type="submit" onclick="document.getElementById('action').value='next'"
-              class="border border-ink bg-ink text-paper rounded-full px-8 py-[15px] text-[15px] font-medium cursor-pointer hover:bg-[#3d342b] hover:border-[#3d342b]">{% if is_last %}Finish set{% else %}Next question{% endif %}</button>
+              class="border border-ink bg-ink text-paper rounded-full px-8 py-[15px] text-[15px] font-medium cursor-pointer hover:bg-[#3d342b] hover:border-[#3d342b]">{% if instant and not revealed %}Check answer{% elif is_last %}Finish set{% else %}Next question{% endif %}</button>
+      {% if not revealed %}
       <button type="submit" onclick="document.getElementById('action').value='skip'"
               class="border border-line bg-transparent rounded-full px-[26px] py-[15px] text-[15px] cursor-pointer hover:border-ink">Skip</button>
+      {% endif %}
       <button type="submit" onclick="document.getElementById('action').value='prev'"
               class="border-0 bg-transparent p-0 label !text-[13px] text-muted hover:text-ink cursor-pointer">← Previous</button>
       <button type="submit" onclick="document.getElementById('action').value='finish'"
               class="border-0 bg-transparent p-0 ml-auto label !text-[13px] text-muted hover:text-rustd cursor-pointer">Finish now</button>
+    </div>
+
+    {# Part of the quiz form, so sending a report keeps answers, timer and mode; the server sends back this same question. #}
+    <div class="mt-10">
+      {% if report_status == "sent" %}
+        <p role="status" class="m-0 text-[14px] text-muted">Thanks, your report has been sent. An admin will review this question.</p>
+      {% else %}
+        <details class="group/report" {% if report_status == "empty" %}open{% endif %}>
+          <summary class="list-none [&::-webkit-details-marker]:hidden inline-flex items-center gap-2 cursor-pointer text-[13px] text-muted hover:text-rustd">
+            <span aria-hidden="true">⚑</span> Report a problem with this question
+          </summary>
+          <div class="mt-4 max-w-[560px] flex flex-col gap-3">
+            <label for="report" class="text-[13px] text-muted">What's wrong? For example, a wrong answer, unclear wording, or out-of-date information.</label>
+            {% if report_status == "empty" %}
+              <p role="alert" class="m-0 text-[13px] text-rustd">Write a short note about the problem before sending.</p>
+            {% endif %}
+            <textarea id="report" name="report" rows="3" maxlength="1000" class="w-full border border-line bg-paper rounded-lg px-4 py-3 text-[15px] text-ink resize-y"></textarea>
+            <div>
+              <button type="submit" onclick="document.getElementById('action').value='report'"
+                      class="border border-line bg-transparent rounded-full px-5 py-2.5 text-[14px] cursor-pointer hover:border-rustd hover:text-rustd">Send report</button>
+            </div>
+          </div>
+        </details>
+      {% endif %}
     </div>
   </div>
 </form>

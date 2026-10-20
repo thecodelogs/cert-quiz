@@ -44,7 +44,17 @@
             <div class="label text-muted2">What learners said</div>
             <div class="flex flex-col gap-2.5 mt-3">
               {% for c in g.comments %}
-              <div class="border-l-2 border-line pl-3 text-[13.5px] leading-[1.5] text-ink2 text-pretty">{{ c.text }}</div>
+              <div class="border-l-2 border-line pl-3">
+                <div class="text-[13.5px] leading-[1.5] text-ink2 text-pretty">{{ c.text }}</div>
+                <div class="mt-1 text-[12px] text-muted">
+                  {% if c.reporter_email %}
+                    {{ c.reporter_name }} · <a href="mailto:{{ c.reporter_email }}" class="text-rustd hover:text-ink">{{ c.reporter_email }}</a>
+                  {% else %}
+                    Account deleted
+                  {% endif %}
+                  · {{ c.when }}
+                </div>
+              </div>
               {% endfor %}
             </div>
             <form method="post" action="/admin/flagged" class="flex flex-wrap gap-2 mt-[18px]">

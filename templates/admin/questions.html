@@ -1,4 +1,6 @@
 {% set title = "Questions — Drill admin" %}{% include "admin/partials/head.html" %}
+{# One column template for the header and every row, so they always line up. #}
+{% set row_grid = "grid-cols-[20px_minmax(0,1fr)_80px_136px_56px_70px_80px_72px_100px] gap-3" %}
 <div class="grid grid-cols-[252px_minmax(0,1fr)] min-w-[1260px]">
 {% include "admin/partials/sidebar.html" %}
   <main>
@@ -8,7 +10,13 @@
           <span class="font-serif text-[25px] tracking-[-0.02em]">Questions</span>
           <span class="label text-muted2">{{ total }} across {{ track_count }} tracks</span>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap items-center gap-2">
+          {# Row checkboxes join this form via form="bulk-delete"; the button only shows once something is ticked. #}
+          <form id="bulk-delete" method="post" action="/admin/questions/delete" class="m-0"
+                onsubmit="var n = this.dataset.count; return confirm('Delete ' + n + ' question' + (n == 1 ? '' : 's') + '? Any that learners have already answered will be retired instead, so their results are kept.');">
+            <input type="hidden" name="back" value="{{ back_href }}" />
+            <button type="submit" id="bulk-delete-btn" hidden class="border border-rustd bg-transparent text-rustd px-4 py-2 text-[13px] rounded-full cursor-pointer hover:bg-rustd hover:text-paper">Delete selected (<span id="bulk-count">0</span>)</button>
+          </form>
           <a href="/admin/import" class="border border-line bg-paper px-4 py-2 text-[13px] rounded-full no-underline text-ink hover:border-ink">Import questions</a>
           <a href="/admin/questions/new{% if filter_track %}?track={{ filter_track }}{% endif %}" class="border border-ink bg-ink text-paper px-[18px] py-2 text-[13px] font-medium rounded-full no-underline hover:bg-[#3d342b] hover:border-[#3d342b]">New question</a>
         </div>
@@ -16,34 +24,54 @@
     </div>
 
     <div class="px-9 pb-[72px]">
+      {% if notice %}
+      <div role="status" class="mt-5 border border-line bg-band px-4 py-3 text-[13.5px] text-ink2">{{ notice }}</div>
+      {% endif %}
       <div class="flex flex-wrap items-center justify-between gap-4 py-[18px] border-b border-rule">
         <form class="flex flex-wrap items-center gap-2.5" method="get" action="/admin/questions">
-          <input name="q" value="{{ filter_q }}" placeholder="Search question text or track code" class="border border-line bg-field px-3 py-2 text-[13px] w-[300px]" />
-          <select name="track" onchange="this.form.submit()" class="border border-line bg-field px-2.5 py-2 text-[13px]">
+          <input name="q" value="{{ filter_q }}" placeholder="Search questions or track code" class="border border-line bg-field px-3 py-2 text-[13px] w-[230px]" />
+          <select name="track" onchange="this.form.submit()" class="border border-line bg-field px-2.5 py-2 text-[13px] max-w-[210px]">
             <option value="">All tracks</option>
             {% for t in track_options %}
             <option value="{{ t.slug }}" {% if t.slug == filter_track %}selected{% endif %}>{{ t.code }} · {{ t.name }}</option>
             {% endfor %}
           </select>
+          {# Searching or changing track keeps the current status and sort. #}
+          {% if filter_status %}<input type="hidden" name="status" value="{{ filter_status }}" />{% endif %}
+          {% if filter_sort %}<input type="hidden" name="sort" value="{{ filter_sort }}" />{% endif %}
+          {% if filter_dir %}<input type="hidden" name="dir" value="{{ filter_dir }}" />{% endif %}
           <div class="flex border border-line">
-            <button type="submit" name="status" value="" class="border-0 border-r border-edge px-3.5 py-2 label cursor-pointer {% if filter_status == "" %}bg-ink text-paper{% else %}bg-transparent text-muted{% endif %}">All</button>
-            <button type="submit" name="status" value="live" class="border-0 border-r border-edge px-3.5 py-2 label cursor-pointer {% if filter_status == "live" %}bg-ink text-paper{% else %}bg-transparent text-muted{% endif %}">Live</button>
-            <button type="submit" name="status" value="draft" class="border-0 px-3.5 py-2 label cursor-pointer {% if filter_status == "draft" %}bg-ink text-paper{% else %}bg-transparent text-muted{% endif %}">Draft</button>
+            {% for tab in status_tabs %}
+            <a href="{{ tab.href }}" class="{% if not loop.last %}border-r border-edge {% endif %}px-3.5 py-2 label no-underline {% if tab.active %}bg-ink text-paper{% else %}bg-transparent text-muted hover:text-ink{% endif %}">{{ tab.label }}</a>
+            {% endfor %}
           </div>
+          <label class="flex items-center gap-2 label text-muted2">Per page
+            <select name="per_page" onchange="this.form.submit()" class="border border-line bg-field px-2 py-2 text-[13px] normal-case tracking-normal text-ink">
+              {% for n in per_page_options %}
+              <option value="{{ n }}" {% if n == per_page %}selected{% endif %}>{{ n }}</option>
+              {% endfor %}
+            </select>
+          </label>
         </form>
-        <div class="label text-muted2">{{ rows | length }} of {{ total }} shown</div>
+        <div class="label text-muted2">{% if matched > 0 %}{{ first }}–{{ last }} of {{ matched }}{% else %}0 of 0{% endif %}</div>
       </div>
 
       <div class="overflow-x-auto">
-        <div class="grid grid-cols-[minmax(360px,1fr)_92px_148px_68px_88px_80px_76px_88px] gap-3.5 min-w-[1180px] pt-3 pb-[9px] border-b border-ink">
-          {% for col in sort_cols %}
-          <a href="?{{ base_qs | safe }}sort={{ col.key }}&amp;dir={% if sort == col.key and dir == "asc" %}desc{% else %}asc{% endif %}" class="flex items-center {% if col.key == 'question' %}justify-start{% elif col.key == 'answered' or col.key == 'correct' or col.key == 'edited' %}justify-end{% else %}justify-start{% endif %} label no-underline {% if sort == col.key %}text-ink font-semibold{% else %}text-muted2 hover:text-ink{% endif %}">{{ col.label }}{% if sort == col.key %} {% if dir == "asc" %}↓{% else %}↑{% endif %}{% endif %}</a>
+        <div class="grid {{ row_grid }} pt-3 pb-[9px] border-b border-ink items-center">
+          <input type="checkbox" id="select-all" aria-label="Select all questions on this page" class="w-[15px] h-[15px] accent-ink cursor-pointer" {% if not rows %}disabled{% endif %} />
+          {% for col in sort_headers %}
+          <a href="{{ col.href }}" class="flex items-center gap-1 {% if col.numeric %}justify-end{% else %}justify-start{% endif %} label no-underline {% if col.active %}text-ink font-semibold{% else %}text-muted2 hover:text-ink{% endif %}">{{ col.label }}{% if col.arrow %}<span aria-hidden="true">{{ col.arrow }}</span>{% endif %}</a>
+          {% if loop.index == 3 %}<span class="label text-muted2">Type</span>{% endif %}
           {% endfor %}
         </div>
 
         {% for r in rows %}
-        <div class="grid grid-cols-[minmax(360px,1fr)_92px_148px_68px_88px_80px_76px_88px] gap-3.5 min-w-[1180px] py-3 border-b border-hair items-center {% if r.status == "draft" %}bg-draftrow{% endif %}">
-          <a href="/admin/questions/{{ r.id }}" class="text-left border-0 bg-transparent p-0 cursor-pointer font-serif text-[16.5px] leading-[1.35] text-ink hover:text-rustd truncate no-underline">{{ r.body }}</a>
+        <div class="grid {{ row_grid }} py-3 border-b border-hair items-center has-[.row-check:checked]:bg-pick {% if r.status == "draft" %}bg-draftrow{% endif %}">
+          <input type="checkbox" name="id" value="{{ r.id }}" form="bulk-delete" aria-label="Select question {{ r.id }}" class="row-check w-[15px] h-[15px] accent-ink cursor-pointer" />
+          <a href="/admin/questions/{{ r.id }}" class="text-left border-0 bg-transparent p-0 cursor-pointer font-serif text-[16.5px] leading-[1.35] text-ink hover:text-rustd truncate no-underline" title="{{ r.body }}">
+            {%- set words = r.body | split(pat=" ") -%}
+            {{ words | slice(end=10) | join(sep=" ") }}{% if words | length > 10 %}…{% endif -%}
+          </a>
           <div class="text-[12px] tracking-[0.06em] text-rustd">{{ r.cert_code }}</div>
           <div class="text-[12.5px] text-ink2 truncate">{{ r.domain }}</div>
           <div class="text-[12px] text-muted">{{ r.kind }}</div>
@@ -56,9 +84,63 @@
         <div class="py-8 text-[13.5px] text-muted">No questions match this filter.</div>
         {% endfor %}
       </div>
+
+      {% if pages > 1 %}
+      <nav aria-label="Pages" class="flex flex-wrap items-center justify-between gap-4 pt-6">
+        <div class="label text-muted2">Page {{ page }} of {{ pages }}</div>
+        <div class="flex items-center gap-1.5">
+          {% if prev_href %}
+          <a href="{{ prev_href }}" class="border border-line px-3 py-1.5 text-[13px] no-underline text-ink hover:border-ink">← Prev</a>
+          {% else %}
+          <span class="border border-hair px-3 py-1.5 text-[13px] text-ghost">← Prev</span>
+          {% endif %}
+          {% for p in page_links %}
+            {% if not p.href %}
+            <span class="px-1.5 text-[13px] text-faint">…</span>
+            {% elif p.current %}
+            <span aria-current="page" class="border border-ink bg-ink text-paper min-w-[34px] text-center px-2 py-1.5 text-[13px]">{{ p.label }}</span>
+            {% else %}
+            <a href="{{ p.href }}" class="border border-line min-w-[34px] text-center px-2 py-1.5 text-[13px] no-underline text-ink hover:border-ink">{{ p.label }}</a>
+            {% endif %}
+          {% endfor %}
+          {% if next_href %}
+          <a href="{{ next_href }}" class="border border-line px-3 py-1.5 text-[13px] no-underline text-ink hover:border-ink">Next →</a>
+          {% else %}
+          <span class="border border-hair px-3 py-1.5 text-[13px] text-ghost">Next →</span>
+          {% endif %}
+        </div>
+      </nav>
+      {% endif %}
     </div>
   </main>
 
 {% include "admin/partials/drawer.html" %}
+<script>
+  /* bulk select: keep the "Delete selected" button and select-all box in step with the row checkboxes */
+  (function () {
+    var all = document.getElementById('select-all');
+    var rows = Array.prototype.slice.call(document.querySelectorAll('.row-check'));
+    var form = document.getElementById('bulk-delete');
+    var btn = document.getElementById('bulk-delete-btn');
+    var count = document.getElementById('bulk-count');
+    if (!all || !form) return;
+
+    function sync() {
+      var n = rows.filter(function (r) { return r.checked; }).length;
+      count.textContent = n;
+      form.dataset.count = n;
+      btn.hidden = n === 0;
+      all.checked = n > 0 && n === rows.length;
+      all.indeterminate = n > 0 && n < rows.length;
+    }
+
+    all.addEventListener('change', function () {
+      rows.forEach(function (r) { r.checked = all.checked; });
+      sync();
+    });
+    rows.forEach(function (r) { r.addEventListener('change', sync); });
+    sync(); // browsers can restore ticks on back/forward
+  })();
+</script>
 </div>
 {% include "admin/partials/foot.html" %}

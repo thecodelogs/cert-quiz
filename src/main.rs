@@ -6,11 +6,13 @@ mod model;
 use axum::{
     body::Bytes,
     extract::{Path, Query, State},
-    http::StatusCode,
+    http::{header, StatusCode},
     response::{Html, IntoResponse, Redirect, Response},
-    routing::get,
-    Router,
+    routing::{get, post},
+    Form, Router,
 };
+use auth::CurrentUser;
+use axum_extra::extract::cookie::CookieJar;
 use model::{fmt_clock, is_correct, score, Answers, Cert, Question, LETTERS};
 use serde::Deserialize;
 use sqlx::postgres::PgPoolOptions;
@@ -52,21 +54,28 @@ async fn main() {
 
     let app = Router::new()
         .route("/", get(home))
+        .route("/login", get(login_page).post(login_submit))
+        .route("/signup", post(signup_submit))
+        .route("/logout", post(logout))
         .route("/quiz/:cert_id", get(quiz_start).post(quiz_step))
         .nest("/admin", admin::router())
         .nest_service("/static", ServeDir::new("static"))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
-    println!("Drill running on http://localhost:3000");
+    let port = std::env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}")).await.unwrap();
+    println!("Drill running on http://localhost:{port}");
     axum::serve(listener, app).await.unwrap();
 }
 
 /* ---------- rendering ---------- */
 
+/// Every page is rendered per request and most depend on who's logged in,
+/// so browsers must not reuse a stored copy (e.g. on Back after logging in
+/// or out, which would show the wrong header).
 fn render(state: &AppState, template: &str, ctx: &Context) -> Response {
     match state.tera.render(template, ctx) {
-        Ok(html) => Html(html).into_response(),
+        Ok(html) => ([(header::CACHE_CONTROL, "no-store")], Html(html)).into_response(),
         Err(err) => {
             eprintln!("render error: {err:?}");
             (StatusCode::INTERNAL_SERVER_ERROR, "template error").into_response()
@@ -108,7 +117,11 @@ struct CertRow {
     best_label: String,
 }
 
-async fn home(State(state): State<Arc<AppState>>, Query(q): Query<HomeQuery>) -> Response {
+async fn home(
+    State(state): State<Arc<AppState>>,
+    user: Option<CurrentUser>,
+    Query(q): Query<HomeQuery>,
+) -> Response {
     let filter = q.provider.unwrap_or_else(|| "All".to_string());
 
     let tabs: Vec<Tab> = [("All", "All"), ("AWS", "AWS"), ("GCP", "Google Cloud"), ("K8s", "Kubernetes")]
@@ -144,10 +157,126 @@ async fn home(State(state): State<Arc<AppState>>, Query(q): Query<HomeQuery>) ->
     ctx.insert("tabs", &tabs);
     ctx.insert("first_cert", &summaries.first().map(|c| c.id.clone()).unwrap_or_default());
     ctx.insert("history", &Vec::<String>::new());
+    ctx.insert("user_name", &user.map(|u| u.name));
     render(&state, "home.html", &ctx)
 }
 
+/* ---------- account ---------- */
+
+const MIN_PASSWORD_LEN: usize = 8;
+
+#[derive(Deserialize)]
+struct LoginQuery {
+    next: Option<String>,
+}
+
+/// What the login/signup page needs to re-render: where to go afterwards,
+/// which side (if either) failed, and the values to put back in the fields.
+#[derive(Default)]
+struct AuthPage<'a> {
+    next: &'a str,
+    login_error: Option<&'a str>,
+    login_email: &'a str,
+    signup_error: Option<&'a str>,
+    signup_name: &'a str,
+    signup_email: &'a str,
+}
+
+fn render_auth(state: &AppState, page: AuthPage) -> Response {
+    let mut ctx = Context::new();
+    ctx.insert("next", &auth::safe_next(page.next));
+    ctx.insert("login_error", &page.login_error);
+    ctx.insert("login_email", page.login_email);
+    ctx.insert("signup_error", &page.signup_error);
+    ctx.insert("signup_name", page.signup_name);
+    ctx.insert("signup_email", page.signup_email);
+    render(state, "login.html", &ctx)
+}
+
+async fn login_page(
+    State(state): State<Arc<AppState>>,
+    user: Option<CurrentUser>,
+    Query(q): Query<LoginQuery>,
+) -> Response {
+    let next = q.next.unwrap_or_default();
+    if user.is_some() {
+        return Redirect::to(&auth::safe_next(&next)).into_response();
+    }
+    render_auth(&state, AuthPage { next: &next, ..Default::default() })
+}
+
+#[derive(Deserialize)]
+struct LoginForm {
+    email: String,
+    password: String,
+    #[serde(default)]
+    next: String,
+}
+
+async fn login_submit(State(state): State<Arc<AppState>>, Form(form): Form<LoginForm>) -> Response {
+    let email = form.email.trim();
+    let fail = |message| {
+        render_auth(&state, AuthPage { next: &form.next, login_error: Some(message), login_email: email, ..Default::default() })
+    };
+
+    let Some((user_id, password_hash, status)) = db::user_for_login(&state.db, email).await else {
+        return fail("Incorrect email or password.");
+    };
+    if !auth::verify_password(&form.password, &password_hash) {
+        return fail("Incorrect email or password.");
+    }
+    if status == "suspended" {
+        return fail("This account has been suspended.");
+    }
+
+    let jar = CookieJar::new().add(auth::create_session(&state.db, user_id).await);
+    (jar, Redirect::to(&auth::safe_next(&form.next))).into_response()
+}
+
+#[derive(Deserialize)]
+struct SignupForm {
+    name: String,
+    email: String,
+    password: String,
+    #[serde(default)]
+    next: String,
+}
+
+async fn signup_submit(State(state): State<Arc<AppState>>, Form(form): Form<SignupForm>) -> Response {
+    let name = form.name.trim();
+    let email = form.email.trim();
+    let fail = |message: &str| {
+        render_auth(
+            &state,
+            AuthPage { next: &form.next, signup_error: Some(message), signup_name: name, signup_email: email, ..Default::default() },
+        )
+    };
+
+    if name.is_empty() || !email.contains('@') {
+        return fail("Enter your name and a valid email.");
+    }
+    if form.password.chars().count() < MIN_PASSWORD_LEN {
+        return fail(&format!("Password must be at least {MIN_PASSWORD_LEN} characters."));
+    }
+
+    let user_id = match db::create_user(&state.db, name, email, &auth::hash_password(&form.password)).await {
+        Ok(id) => id,
+        Err(message) => return fail(&message),
+    };
+
+    let jar = CookieJar::new().add(auth::create_session(&state.db, user_id).await);
+    (jar, Redirect::to(&auth::safe_next(&form.next))).into_response()
+}
+
+async fn logout(State(state): State<Arc<AppState>>, jar: CookieJar) -> Response {
+    let jar = auth::end_session(&state.db, jar).await;
+    (jar, Redirect::to("/")).into_response()
+}
+
 /* ---------- quiz ---------- */
+
+/// Longest learner report kept, in characters (the textarea enforces it too).
+const MAX_REPORT_LEN: usize = 1000;
 
 #[derive(serde::Serialize)]
 struct OptionView {
@@ -182,7 +311,7 @@ async fn question_context(
             let is_picked = picked.contains(&oi);
             let is_answer = q.answer.contains(&oi);
             let (rule_class, bg_class, letter_class) = if revealed && is_answer {
-                ("border-l-ink", "bg-right", "text-ink")
+                ("border-l-ink", "bg-correct", "text-ink")
             } else if revealed && is_picked {
                 ("border-l-rust", "bg-wrong", "text-rustd")
             } else {
@@ -220,10 +349,11 @@ async fn question_context(
     ctx.insert("correct", &is_correct(q, picked));
     ctx.insert("is_last", &(index + 1 == qs.len()));
     ctx.insert("answers_json", &serde_json::to_string(answers).unwrap_or_else(|_| "{}".into()));
+    ctx.insert("report_status", ""); // quiz_step sets "sent" / "empty" after a report
     ctx
 }
 
-async fn quiz_start(State(state): State<Arc<AppState>>, Path(cert_id): Path<String>) -> Response {
+async fn quiz_start(State(state): State<Arc<AppState>>, _user: CurrentUser, Path(cert_id): Path<String>) -> Response {
     let Some(cert) = db::load_cert(&state.db, &cert_id).await else {
         return Redirect::to("/").into_response();
     };
@@ -236,6 +366,7 @@ async fn quiz_start(State(state): State<Arc<AppState>>, Path(cert_id): Path<Stri
 /// server stays stateless — move it into a session or an `attempts` table later.
 async fn quiz_step(
     State(state): State<Arc<AppState>>,
+    user: CurrentUser,
     Path(cert_id): Path<String>,
     body: Bytes,
 ) -> Response {
@@ -251,6 +382,7 @@ async fn quiz_step(
     let mut was_revealed = false;
     let mut answers: Answers = BTreeMap::new();
     let mut picked: Vec<usize> = Vec::new();
+    let mut report = String::new();
 
     for (key, value) in form_urlencoded::parse(&body) {
         match key.as_ref() {
@@ -260,6 +392,7 @@ async fn quiz_step(
             "instant" => instant = value == "1",
             "revealed" => was_revealed = value == "1",
             "answers" => answers = serde_json::from_str(&value).unwrap_or_default(),
+            "report" => report = value.trim().to_string(),
             "choice" => {
                 if let Ok(v) = value.parse::<usize>() {
                     picked.push(v);
@@ -273,14 +406,42 @@ async fn quiz_step(
     if action == "skip" {
         picked.clear();
     }
+    // Once a question's answer has been shown it's locked in: the options are
+    // disabled on that screen, and whatever comes back for them is ignored, so
+    // seeing the right answer can't be turned into a changed pick.
+    if was_revealed {
+        picked = answers.get(&index).cloned().unwrap_or_default();
+    }
     if picked.is_empty() {
         answers.remove(&index);
     } else {
         answers.insert(index, picked.clone());
     }
 
+    // "Report a problem": file it, then show the same screen again with the
+    // learner's progress intact.
+    if action == "report" {
+        let status = if report.is_empty() {
+            "empty"
+        } else {
+            let comment: String = report.chars().take(MAX_REPORT_LEN).collect();
+            db::flag_question(&state.db, qs[index].id, &comment, user.id).await;
+            "sent"
+        };
+        let mut ctx = question_context(&state, &cert, index, &picked, &answers, elapsed, instant, was_revealed).await;
+        ctx.insert("report_status", status);
+        return render(&state, "question.html", &ctx);
+    }
+
     // instant feedback: the first submit reveals the answer, the second advances
-    if instant && action == "next" && !picked.is_empty() && !was_revealed {
+    if instant && action == "next" && !was_revealed {
+        if picked.is_empty() {
+            // "Check answer" with nothing picked: stay put rather than
+            // silently moving on — Skip is the way past a question.
+            let mut ctx = question_context(&state, &cert, index, &picked, &answers, elapsed, instant, false).await;
+            ctx.insert("need_pick", &true);
+            return render(&state, "question.html", &ctx);
+        }
         let ctx = question_context(&state, &cert, index, &picked, &answers, elapsed, instant, true).await;
         return render(&state, "question.html", &ctx);
     }

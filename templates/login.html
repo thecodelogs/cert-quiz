@@ -1,0 +1,64 @@
+{% set title = "Log in or sign up — Drill" %}{% include "partials/head.html" %}
+
+<div class="bg-band border-b border-edge">
+  <div class="max-w-[1180px] mx-auto px-6 md:px-14 py-6 flex items-baseline justify-between gap-6">
+    <a href="/" class="font-serif text-[24px] font-medium tracking-[-0.01em] no-underline text-ink">Drill<span class="text-rust">.</span></a>
+    <a href="/" class="label text-muted2 no-underline hover:text-ink">← All tracks</a>
+  </div>
+</div>
+
+<div class="max-w-[1180px] mx-auto px-6 md:px-14">
+  <div class="pt-[64px] pb-[48px] border-b border-rule">
+    <div class="font-serif italic text-[19px] text-rustd mb-4">One step first</div>
+    <h1 class="font-serif font-normal text-[44px] md:text-[56px] leading-[1.05] tracking-[-0.03em] m-0 text-balance">Log in to start practising.</h1>
+    <p class="font-serif text-[20px] leading-[1.55] text-ink2 mt-6 mb-0 max-w-[34em] text-pretty">You need an account to take a set, so your scores have somewhere to go.</p>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 py-14">
+    <section class="pb-12 md:pb-0 md:pr-16">
+      <h2 class="font-serif text-[30px] font-normal tracking-[-0.02em] m-0 mb-2">Welcome back</h2>
+      <p class="text-[14px] text-muted mt-0 mb-8">Log in with the email you signed up with.</p>
+
+      {% if login_error %}
+        <div class="mb-5 text-[13px] text-rustd border border-rustd bg-wrong rounded-lg px-4 py-3">{{ login_error }}</div>
+      {% endif %}
+
+      <form method="post" action="/login" class="flex flex-col gap-4">
+        <input type="hidden" name="next" value="{{ next }}" />
+        <label class="flex flex-col gap-2 label !text-[11px] text-muted">Email
+          <input type="email" name="email" value="{{ login_email }}" required autocomplete="email" class="font-sans normal-case tracking-normal text-[15px] text-ink border border-line rounded-lg px-4 py-3 bg-paper" />
+        </label>
+        <label class="flex flex-col gap-2 label !text-[11px] text-muted">Password
+          <input type="password" name="password" required autocomplete="current-password" class="font-sans normal-case tracking-normal text-[15px] text-ink border border-line rounded-lg px-4 py-3 bg-paper" />
+        </label>
+        <button type="submit" class="mt-2 border border-ink bg-ink text-paper rounded-full px-8 py-[15px] text-[15px] font-medium cursor-pointer hover:bg-[#3d342b] hover:border-[#3d342b]">Log in</button>
+      </form>
+    </section>
+
+    <section class="pt-12 md:pt-0 md:pl-16 border-t md:border-t-0 md:border-l border-rule">
+      <h2 class="font-serif text-[30px] font-normal tracking-[-0.02em] m-0 mb-2">New here?</h2>
+      <p class="text-[14px] text-muted mt-0 mb-8">Create an account. It takes a few seconds.</p>
+
+      {% if signup_error %}
+        <div class="mb-5 text-[13px] text-rustd border border-rustd bg-wrong rounded-lg px-4 py-3">{{ signup_error }}</div>
+      {% endif %}
+
+      <form method="post" action="/signup" class="flex flex-col gap-4">
+        <input type="hidden" name="next" value="{{ next }}" />
+        <label class="flex flex-col gap-2 label !text-[11px] text-muted">Name
+          <input type="text" name="name" value="{{ signup_name }}" required autocomplete="name" class="font-sans normal-case tracking-normal text-[15px] text-ink border border-line rounded-lg px-4 py-3 bg-paper" />
+        </label>
+        <label class="flex flex-col gap-2 label !text-[11px] text-muted">Email
+          <input type="email" name="email" value="{{ signup_email }}" required autocomplete="email" class="font-sans normal-case tracking-normal text-[15px] text-ink border border-line rounded-lg px-4 py-3 bg-paper" />
+        </label>
+        <label class="flex flex-col gap-2 label !text-[11px] text-muted">Password
+          <input type="password" name="password" required minlength="8" autocomplete="new-password" class="font-sans normal-case tracking-normal text-[15px] text-ink border border-line rounded-lg px-4 py-3 bg-paper" />
+          <span class="normal-case tracking-normal text-[12px] text-faint">At least 8 characters.</span>
+        </label>
+        <button type="submit" class="mt-2 border border-ink bg-transparent text-ink rounded-full px-8 py-[15px] text-[15px] font-medium cursor-pointer hover:bg-ink hover:text-paper">Create account</button>
+      </form>
+    </section>
+  </div>
+</div>
+
+{% include "partials/foot.html" %}
