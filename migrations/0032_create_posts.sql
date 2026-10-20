@@ -5,7 +5,7 @@
 -- `published_at` is set the first time a post goes live and kept if it's
 -- later unpublished and republished, so its date doesn't jump around.
 create table posts (
-    id           bigserial primary key,
+    id           uuid primary key default uuid_v7(),
     slug         text not null unique,
     title        text not null,
     summary      text not null default '',

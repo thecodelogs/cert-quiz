@@ -7,7 +7,7 @@
         <div class="bg-band border-b border-edge px-6 py-4 flex items-center justify-between gap-4">
           <div>
             <div class="font-serif text-[21px] tracking-[-0.02em]">{% if drawer_mode == 'edit' %}Edit question{% else %}New question{% endif %}</div>
-            <div class="label text-muted2 mt-1">{{ cert_code }}{% if drawer_mode == 'edit' %} · #{{ q_id }}{% endif %}</div>
+            <div class="label text-muted2 mt-1">{{ cert_code }}{% if drawer_mode == 'edit' %} · <span title="{{ q_id }}">#{{ q_ref }}</span>{% endif %}</div>
           </div>
           <a href="/admin/questions" class="border-0 bg-transparent p-0 label !tracking-[0.14em] text-muted hover:text-rustd cursor-pointer no-underline">Close</a>
         </div>

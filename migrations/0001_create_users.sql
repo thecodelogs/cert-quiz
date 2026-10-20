@@ -1,5 +1,5 @@
 create table users (
-    id            uuid primary key default gen_random_uuid(),
+    id            uuid primary key default uuid_v7(),
     name          text not null,
     email         citext not null unique,
     password_hash text not null,

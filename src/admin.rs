@@ -386,7 +386,7 @@ async fn insert_drawer_ctx(
     state: &AppState,
     ctx: &mut Context,
     mode: &str,
-    id: Option<i64>,
+    id: Option<Uuid>,
     cert_slug: &str,
     cert_code: &str,
     domain: &str,
@@ -403,6 +403,10 @@ async fn insert_drawer_ctx(
     ctx.insert("drawer_mode", mode);
     if let Some(id) = id {
         ctx.insert("q_id", &id);
+        // The leading digits of a v7 id are its timestamp, shared by questions
+        // created together; the random tail tells them apart at a glance.
+        let simple = id.simple().to_string();
+        ctx.insert("q_ref", &simple[simple.len() - 8..]);
     }
     ctx.insert("cert_slug", cert_slug);
     ctx.insert("cert_code", cert_code);
@@ -459,7 +463,7 @@ async fn questions_list_page(
 
 /// Runs the delete and returns to `back` (only ever a question-list URL) with
 /// the counts for the notice.
-async fn delete_and_return(state: &AppState, ids: &[i64], back: Option<&str>) -> Response {
+async fn delete_and_return(state: &AppState, ids: &[Uuid], back: Option<&str>) -> Response {
     let back = back
         .filter(|b| *b == "/admin/questions" || b.starts_with("/admin/questions?"))
         .unwrap_or("/admin/questions");
@@ -469,7 +473,7 @@ async fn delete_and_return(state: &AppState, ids: &[i64], back: Option<&str>) ->
 }
 
 /// The Delete button in the edit sidebar.
-async fn question_delete(State(state): State<Arc<AppState>>, _admin: AdminUser, Path(id): Path<i64>, body: Bytes) -> Response {
+async fn question_delete(State(state): State<Arc<AppState>>, _admin: AdminUser, Path(id): Path<Uuid>, body: Bytes) -> Response {
     let back = form_urlencoded::parse(&body).find(|(k, _)| k == "back").map(|(_, v)| v.into_owned());
     delete_and_return(&state, &[id], back.as_deref()).await
 }
@@ -480,7 +484,7 @@ async fn questions_delete(State(state): State<Arc<AppState>>, _admin: AdminUser,
     let mut back = None;
     for (key, value) in form_urlencoded::parse(&body) {
         match key.as_ref() {
-            "id" => ids.extend(value.parse::<i64>().ok()),
+            "id" => ids.extend(Uuid::parse_str(&value).ok()),
             "back" => back = Some(value.into_owned()),
             _ => {}
         }
@@ -512,7 +516,7 @@ async fn question_new_page(
     render(&state, "admin/questions.html", &ctx)
 }
 
-async fn question_edit_page(State(state): State<Arc<AppState>>, admin: AdminUser, Path(id): Path<i64>) -> Response {
+async fn question_edit_page(State(state): State<Arc<AppState>>, admin: AdminUser, Path(id): Path<Uuid>) -> Response {
     let filter = db::QuestionFilter::default();
     let mut ctx = build_questions_list_ctx(&state, &admin, &filter).await;
     if let Some(detail) = db::question_detail(&state.db, id).await {
@@ -644,7 +648,7 @@ async fn question_create(State(state): State<Arc<AppState>>, admin: AdminUser, b
     }
 }
 
-async fn question_update(State(state): State<Arc<AppState>>, admin: AdminUser, Path(id): Path<i64>, body: Bytes) -> Response {
+async fn question_update(State(state): State<Arc<AppState>>, admin: AdminUser, Path(id): Path<Uuid>, body: Bytes) -> Response {
     let parsed = parse_question_form(&body);
     let input = db::NewQuestionInput {
         cert_slug: &parsed.cert_slug,
@@ -695,7 +699,7 @@ async fn flagged_page(State(state): State<Arc<AppState>>, admin: AdminUser) -> R
 }
 
 async fn flagged_action(State(state): State<Arc<AppState>>, _admin: AdminUser, body: Bytes) -> Response {
-    let mut question_id: Option<i64> = None;
+    let mut question_id: Option<Uuid> = None;
     let mut action = String::new();
     for (key, value) in form_urlencoded::parse(&body) {
         match key.as_ref() {
@@ -1017,7 +1021,7 @@ fn slugify(text: &str) -> String {
     slug.trim_end_matches('-').chars().take(80).collect::<String>().trim_end_matches('-').to_string()
 }
 
-async fn render_post_editor(state: &AppState, admin: &AdminUser, id: Option<i64>, input: &db::PostInput, error: Option<&str>) -> Response {
+async fn render_post_editor(state: &AppState, admin: &AdminUser, id: Option<Uuid>, input: &db::PostInput, error: Option<&str>) -> Response {
     let mut ctx = sidebar_context(state, "blog", admin).await;
     ctx.insert("post_id", &id);
     ctx.insert("post_title", &input.title);
@@ -1034,7 +1038,7 @@ async fn post_new_page(State(state): State<Arc<AppState>>, admin: AdminUser) -> 
     render_post_editor(&state, &admin, None, &input, None).await
 }
 
-async fn post_edit_page(State(state): State<Arc<AppState>>, admin: AdminUser, Path(id): Path<i64>) -> Response {
+async fn post_edit_page(State(state): State<Arc<AppState>>, admin: AdminUser, Path(id): Path<Uuid>) -> Response {
     let Some(input) = db::post_for_edit(&state.db, id).await else {
         return Redirect::to("/admin/blog").into_response();
     };
@@ -1079,7 +1083,7 @@ fn post_input_error(input: &db::PostInput) -> Option<&'static str> {
     }
 }
 
-async fn save_post_and_return(state: &AppState, admin: &AdminUser, id: Option<i64>, form: PostForm) -> Response {
+async fn save_post_and_return(state: &AppState, admin: &AdminUser, id: Option<Uuid>, form: PostForm) -> Response {
     let input = post_input(form);
     if let Some(error) = post_input_error(&input) {
         return render_post_editor(state, admin, id, &input, Some(error)).await;
@@ -1097,13 +1101,13 @@ async fn post_create(State(state): State<Arc<AppState>>, admin: AdminUser, axum:
 async fn post_update(
     State(state): State<Arc<AppState>>,
     admin: AdminUser,
-    Path(id): Path<i64>,
+    Path(id): Path<Uuid>,
     axum::Form(form): axum::Form<PostForm>,
 ) -> Response {
     save_post_and_return(&state, &admin, Some(id), form).await
 }
 
-async fn post_delete(State(state): State<Arc<AppState>>, _admin: AdminUser, Path(id): Path<i64>) -> Response {
+async fn post_delete(State(state): State<Arc<AppState>>, _admin: AdminUser, Path(id): Path<Uuid>) -> Response {
     db::delete_post(&state.db, id).await;
     Redirect::to("/admin/blog?deleted=1").into_response()
 }

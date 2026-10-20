@@ -1,7 +1,7 @@
 create table questions (
-    id               bigserial primary key,
-    certification_id bigint not null references certifications(id) on delete cascade,
-    domain_id        bigint not null references domains(id),
+    id               uuid primary key default uuid_v7(),
+    certification_id uuid not null references certifications(id) on delete cascade,
+    domain_id        uuid not null references domains(id),
     body             text not null,
     explain          text not null,
     sort_order       integer not null,

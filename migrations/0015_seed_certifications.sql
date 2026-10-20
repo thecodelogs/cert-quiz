@@ -11,4 +11,6 @@ from (values
     ('pca', 'GCP', 'GCP-PCA', 'Professional Cloud Architect', 'Professional', 'Designing, provisioning and evolving solutions with business and compliance constraints.', 72),
     ('cka', 'K8s', 'CKA', 'Certified Kubernetes Administrator', 'Professional', 'Cluster architecture, workloads, networking, storage and troubleshooting.', 72)
 ) as v(slug, provider_name, code, name, difficulty, blurb, pass_mark)
-join providers p on p.name = v.provider_name;
+join providers p on p.name = v.provider_name
+-- Tracks are listed in id order, so insert them in the order above.
+order by array_position(array['saa', 'dva', 'ace', 'pca', 'cka'], v.slug);

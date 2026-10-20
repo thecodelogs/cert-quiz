@@ -1,7 +1,7 @@
 create table attempts (
-    id               bigserial primary key,
+    id               uuid primary key default uuid_v7(),
     user_id          uuid not null references users(id) on delete cascade,
-    certification_id bigint not null references certifications(id),
+    certification_id uuid not null references certifications(id),
     started_at       timestamptz not null default now(),
     finished_at      timestamptz,
     elapsed_seconds  integer not null default 0,

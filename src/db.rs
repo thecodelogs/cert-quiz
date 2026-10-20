@@ -86,7 +86,7 @@ pub async fn load_cert(pool: &PgPool, slug: &str) -> Option<Cert> {
         .expect("failed to load certification");
 
     let cert_row = cert_row?;
-    let cert_id: i64 = cert_row.try_get("id").expect("certifications.id");
+    let cert_id: Uuid = cert_row.try_get("id").expect("certifications.id");
 
     let question_rows = sqlx::query(
         "select q.id, q.body, q.explain, d.name as domain_name
@@ -102,7 +102,7 @@ pub async fn load_cert(pool: &PgPool, slug: &str) -> Option<Cert> {
 
     let mut questions = Vec::with_capacity(question_rows.len());
     for q_row in question_rows {
-        let question_id: i64 = q_row.try_get("id").expect("questions.id");
+        let question_id: Uuid = q_row.try_get("id").expect("questions.id");
 
         let option_rows = sqlx::query(
             "select body, is_correct from question_options where question_id = $1 order by option_index",
@@ -489,7 +489,7 @@ pub struct QuestionPage {
 
 #[derive(serde::Serialize)]
 pub struct QuestionRow {
-    pub id: i64,
+    pub id: Uuid,
     pub body: String,
     pub cert_code: String,
     pub domain: String,
@@ -597,7 +597,7 @@ pub struct OptionDetail {
 
 #[derive(serde::Serialize)]
 pub struct QuestionDetail {
-    pub id: i64,
+    pub id: Uuid,
     pub cert_slug: String,
     pub cert_code: String,
     pub body: String,
@@ -609,7 +609,7 @@ pub struct QuestionDetail {
     pub options: Vec<OptionDetail>,
 }
 
-pub async fn question_detail(pool: &PgPool, id: i64) -> Option<QuestionDetail> {
+pub async fn question_detail(pool: &PgPool, id: Uuid) -> Option<QuestionDetail> {
     let row = sqlx::query(
         "select q.id, c.slug as cert_slug, c.code as cert_code, q.body, q.explain,
                 d.name as domain, q.difficulty, q.status, q.tags
@@ -694,7 +694,7 @@ pub struct NewQuestionInput<'a> {
 
 /// Inserts a question and its options, returning the new question's id.
 /// Shared by the editor's "New question" save and the CSV/JSON importer.
-pub async fn insert_question(pool: &PgPool, input: &NewQuestionInput<'_>) -> Result<i64, String> {
+pub async fn insert_question(pool: &PgPool, input: &NewQuestionInput<'_>) -> Result<Uuid, String> {
     let cert_row = sqlx::query("select id from certifications where slug = $1")
         .bind(input.cert_slug)
         .fetch_optional(pool)
@@ -703,7 +703,7 @@ pub async fn insert_question(pool: &PgPool, input: &NewQuestionInput<'_>) -> Res
     let Some(cert_row) = cert_row else {
         return Err(format!("unknown track '{}'", input.cert_slug));
     };
-    let cert_id: i64 = cert_row.try_get("id").expect("id");
+    let cert_id: Uuid = cert_row.try_get("id").expect("id");
 
     let domain_row = sqlx::query("select id from domains where certification_id = $1 and name = $2")
         .bind(cert_id)
@@ -714,7 +714,7 @@ pub async fn insert_question(pool: &PgPool, input: &NewQuestionInput<'_>) -> Res
     let Some(domain_row) = domain_row else {
         return Err(format!("domain '{}' does not exist on this track", input.domain));
     };
-    let domain_id: i64 = domain_row.try_get("id").expect("id");
+    let domain_id: Uuid = domain_row.try_get("id").expect("id");
 
     if input.options.len() < 2 || input.options.len() > 6 {
         return Err("a question needs between 2 and 6 options".to_string());
@@ -746,7 +746,7 @@ pub async fn insert_question(pool: &PgPool, input: &NewQuestionInput<'_>) -> Res
     .fetch_one(pool)
     .await
     .expect("failed to insert question");
-    let question_id: i64 = inserted.try_get("id").expect("id");
+    let question_id: Uuid = inserted.try_get("id").expect("id");
 
     for (idx, (body, is_correct)) in input.options.iter().enumerate() {
         sqlx::query(
@@ -769,7 +769,7 @@ pub async fn insert_question(pool: &PgPool, input: &NewQuestionInput<'_>) -> Res
 /// a newly added option.
 pub async fn update_question(
     pool: &PgPool,
-    id: i64,
+    id: Uuid,
     input: &NewQuestionInput<'_>,
     slots: &[usize],
 ) -> Result<(), String> {
@@ -786,7 +786,7 @@ pub async fn update_question(
     let Some(domain_row) = domain_row else {
         return Err(format!("domain '{}' does not exist on this track", input.domain));
     };
-    let domain_id: i64 = domain_row.try_get("id").expect("id");
+    let domain_id: Uuid = domain_row.try_get("id").expect("id");
 
     if input.options.len() < 2 || input.options.len() > 6 {
         return Err("a question needs between 2 and 6 options".to_string());
@@ -902,7 +902,7 @@ pub struct DeleteCounts {
 /// Hard-deletes questions nobody has answered (options and flags cascade).
 /// Ones a learner has answered are retired instead, since `attempt_answers`
 /// must keep pointing at them. All in one transaction.
-pub async fn delete_questions(pool: &PgPool, ids: &[i64]) -> DeleteCounts {
+pub async fn delete_questions(pool: &PgPool, ids: &[Uuid]) -> DeleteCounts {
     let mut tx = pool.begin().await.expect("failed to begin transaction");
 
     let retired = sqlx::query(
@@ -943,7 +943,7 @@ pub struct FlaggedComment {
 
 #[derive(serde::Serialize)]
 pub struct FlaggedGroup {
-    pub question_id: i64,
+    pub question_id: Uuid,
     pub cert_code: String,
     pub domain: String,
     pub body: String,
@@ -972,7 +972,7 @@ pub async fn flagged_list(pool: &PgPool) -> Vec<FlaggedGroup> {
 
     let mut groups = Vec::with_capacity(question_rows.len());
     for row in question_rows {
-        let question_id: i64 = row.try_get("id").expect("id");
+        let question_id: Uuid = row.try_get("id").expect("id");
 
         let option_rows = sqlx::query("select body, is_correct from question_options where question_id = $1 order by option_index")
             .bind(question_id)
@@ -1026,7 +1026,7 @@ pub async fn flagged_list(pool: &PgPool) -> Vec<FlaggedGroup> {
 
 /// `resolution` is "kept" or "retired" — "edit" is handled by redirecting to
 /// the editor, not by a DB write here.
-pub async fn resolve_flags(pool: &PgPool, question_id: i64, resolution: &str) {
+pub async fn resolve_flags(pool: &PgPool, question_id: Uuid, resolution: &str) {
     sqlx::query(
         "update question_flags set status = 'resolved', resolution = $1, resolved_at = now()
          where question_id = $2 and status = 'open'",
@@ -1049,7 +1049,7 @@ pub async fn resolve_flags(pool: &PgPool, question_id: i64, resolution: &str) {
 /// A learner's report against a question, shown on the admin Flagged page.
 /// A second report from the same person while their first is still open is
 /// ignored, so resubmitting doesn't pile up duplicates.
-pub async fn flag_question(pool: &PgPool, question_id: i64, comment: &str, user_id: Uuid) {
+pub async fn flag_question(pool: &PgPool, question_id: Uuid, comment: &str, user_id: Uuid) {
     sqlx::query(
         "insert into question_flags (question_id, comment, reported_by)
          select $1, $2, $3
@@ -1382,7 +1382,7 @@ pub async fn published_post(pool: &PgPool, slug: &str) -> Option<Post> {
 
 #[derive(serde::Serialize)]
 pub struct AdminPostRow {
-    pub id: i64,
+    pub id: Uuid,
     pub slug: String,
     pub title: String,
     pub status: String,
@@ -1423,7 +1423,7 @@ pub struct PostInput {
     pub status: String,
 }
 
-pub async fn post_for_edit(pool: &PgPool, id: i64) -> Option<PostInput> {
+pub async fn post_for_edit(pool: &PgPool, id: Uuid) -> Option<PostInput> {
     let row = sqlx::query("select title, slug, summary, body, status from posts where id = $1")
         .bind(id)
         .fetch_optional(pool)
@@ -1441,7 +1441,7 @@ pub async fn post_for_edit(pool: &PgPool, id: i64) -> Option<PostInput> {
 /// Creates (`id` None) or updates a post and returns its id. `published_at`
 /// is stamped the first time the post is published and kept afterwards.
 /// `Err` carries a message fit to show in the editor.
-pub async fn save_post(pool: &PgPool, id: Option<i64>, input: &PostInput, author: Uuid) -> Result<i64, String> {
+pub async fn save_post(pool: &PgPool, id: Option<Uuid>, input: &PostInput, author: Uuid) -> Result<Uuid, String> {
     let result = match id {
         None => {
             sqlx::query(
@@ -1487,7 +1487,7 @@ pub async fn save_post(pool: &PgPool, id: Option<i64>, input: &PostInput, author
     }
 }
 
-pub async fn delete_post(pool: &PgPool, id: i64) {
+pub async fn delete_post(pool: &PgPool, id: Uuid) {
     sqlx::query("delete from posts where id = $1").bind(id).execute(pool).await.expect("failed to delete post");
 }
 

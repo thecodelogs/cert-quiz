@@ -1,5 +1,5 @@
 create table permissions (
-    id          bigserial primary key,
+    id          uuid primary key default uuid_v7(),
     key         text not null unique,
     description text
 );

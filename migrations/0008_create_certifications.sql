@@ -1,7 +1,7 @@
 create table certifications (
-    id          bigserial primary key,
+    id          uuid primary key default uuid_v7(),
     slug        text not null unique,
-    provider_id bigint not null references providers(id),
+    provider_id uuid not null references providers(id),
     code        text not null,
     name        text not null unique,
     difficulty  text not null,

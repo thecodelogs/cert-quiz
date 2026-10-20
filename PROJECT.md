@@ -160,8 +160,12 @@ and `history` is an empty list.
 - **Admin:** `question_flags` (learner reports, open/resolved, resolution
   edited/kept/retired), `imports` (log of each bulk import).
 
-IDs: `bigserial` everywhere except `users`/`sessions` (uuid) and `roles`
-(smallserial). URLs use `certifications.slug`, never the numeric id.
+IDs: every table's `id` is a UUID v7, defaulting to `uuid_v7()` (a SQL
+function defined in migration 0000, so it works on any Postgres version). v7
+ids sort by creation time. The exception is `sessions.id`: it stays a fully
+random v4 (`gen_random_uuid()`), because it is the login cookie. Track URLs
+use `certifications.slug`; admin URLs (`/admin/questions/<id>`,
+`/admin/blog/<id>`) use the UUID.
 
 Seed content: 5 tracks (`saa`, `dva`, `ace`, `pca`, `cka`) with 60 questions
 in total, plus demo users, attempts, flags and imports (`0015`–`0023`, `0031`).

@@ -1,5 +1,5 @@
 create table roles (
-    id          smallserial primary key,
+    id          uuid primary key default uuid_v7(),
     name        text not null unique,
     description text,
     created_at  timestamptz not null default now()

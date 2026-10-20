@@ -1,8 +1,8 @@
 -- One row per paste on the Import page — what got accepted/rejected and
 -- why, so "Recent imports" has something real to show.
 create table imports (
-    id                bigserial primary key,
-    certification_id  bigint not null references certifications(id),
+    id                uuid primary key default uuid_v7(),
+    certification_id  uuid not null references certifications(id),
     format            text not null check (format in ('json', 'csv')),
     rows_accepted     integer not null default 0,
     rows_rejected     integer not null default 0,

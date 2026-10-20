@@ -6,7 +6,7 @@ pub const LETTERS: [char; 6] = ['A', 'B', 'C', 'D', 'E', 'F'];
 #[derive(Debug, Clone)]
 pub struct Question {
     /// `questions.id` — what a learner's report is filed against.
-    pub id: i64,
+    pub id: uuid::Uuid,
     pub q: String,
     pub options: Vec<String>,
     pub answer: Vec<usize>,
@@ -78,7 +78,6 @@ pub struct ReviewRow {
 }
 
 pub struct Score {
-    pub total: usize,
     pub correct: usize,
     pub wrong: usize,
     pub skipped: usize,
@@ -141,7 +140,6 @@ pub fn score(cert: &Cert, answers: &Answers) -> Score {
     }
 
     Score {
-        total: qs.len(),
         correct,
         wrong: qs.len() - correct - skipped,
         skipped,
